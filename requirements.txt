@@ -1,0 +1,6 @@
+pandas
+numpy
+google-genai
+python-dotenv
+scikit-learn
+tqdm

@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Environment variables / secrets
+.env
+*.env
+
+# Large/raw data
+data/raw/
+*.csv
+*.parquet
+*.pkl
+*.bin
+
+# Outputs
+outputs/
+logs/
+*.log
+
+# Mac
+.DS_Store
+
+# Cursor / VSCode
+.vscode/
+.cursor/
