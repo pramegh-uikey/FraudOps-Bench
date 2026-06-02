@@ -1,12 +1,10 @@
 import json
+import argparse
 from pathlib import Path
 import pandas as pd
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-INPUT_PATH = PROJECT_ROOT / "outputs" / "evidence_baseline_parsed.jsonl"
-OUTPUT_PATH = PROJECT_ROOT / "outputs" / "evidence_baseline_metrics.csv"
 
 
 def map_disposition_to_pred(disposition):
@@ -20,9 +18,20 @@ def map_disposition_to_pred(disposition):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--baseline", required=True, choices=["direct", "evidence"])
+    args = parser.parse_args()
+
+    if args.baseline == "direct":
+        input_path = PROJECT_ROOT / "outputs" / "direct_baseline_parsed.jsonl"
+        output_path = PROJECT_ROOT / "outputs" / "direct_baseline_metrics.csv"
+    else:
+        input_path = PROJECT_ROOT / "outputs" / "evidence_baseline_parsed.jsonl"
+        output_path = PROJECT_ROOT / "outputs" / "evidence_baseline_metrics.csv"
+
     rows = []
 
-    with open(INPUT_PATH, "r") as f:
+    with open(input_path, "r") as f:
         for line in f:
             row = json.loads(line)
 
@@ -46,8 +55,14 @@ def main():
 
     df = pd.DataFrame(rows)
 
+    print(f"\nBaseline: {args.baseline}")
+
     print("\nParsed successful cases:")
     print(len(df))
+
+    if len(df) == 0:
+        print("No successful parsed cases.")
+        return
 
     print("\nDisposition counts:")
     print(df["disposition"].value_counts(dropna=False))
@@ -72,11 +87,11 @@ def main():
         print(f"Recall:    {recall:.3f}")
         print(f"F1:        {f1:.3f}")
 
-        print("\nConfusion matrix:")
-        print(confusion_matrix(y_true, y_pred))
+        print("\nConfusion matrix labels=[0,1]:")
+        print(confusion_matrix(y_true, y_pred, labels=[0, 1]))
 
-    df.to_csv(OUTPUT_PATH, index=False)
-    print(f"\nSaved case-level metrics to {OUTPUT_PATH}")
+    df.to_csv(output_path, index=False)
+    print(f"\nSaved case-level metrics to {output_path}")
 
 
 if __name__ == "__main__":

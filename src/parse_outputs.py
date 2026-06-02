@@ -1,23 +1,18 @@
 import json
 import re
+import argparse
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-INPUT_PATH = PROJECT_ROOT / "outputs" / "evidence_baseline_gemini.jsonl"
-OUTPUT_PATH = PROJECT_ROOT / "outputs" / "evidence_baseline_parsed.jsonl"
-
 
 def extract_json(text):
     text = text.strip()
-
-    # remove markdown fences if present
     text = re.sub(r"^```json", "", text)
     text = re.sub(r"^```", "", text)
     text = re.sub(r"```$", "", text)
     text = text.strip()
 
-    # extract first JSON object
     start = text.find("{")
     end = text.rfind("}")
 
@@ -28,9 +23,20 @@ def extract_json(text):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--baseline", required=True, choices=["direct", "evidence"])
+    args = parser.parse_args()
+
+    if args.baseline == "direct":
+        input_path = PROJECT_ROOT / "outputs" / "direct_baseline_gemini.jsonl"
+        output_path = PROJECT_ROOT / "outputs" / "direct_baseline_parsed.jsonl"
+    else:
+        input_path = PROJECT_ROOT / "outputs" / "evidence_baseline_gemini.jsonl"
+        output_path = PROJECT_ROOT / "outputs" / "evidence_baseline_parsed.jsonl"
+
     parsed_rows = []
 
-    with open(INPUT_PATH, "r") as f:
+    with open(input_path, "r") as f:
         for line in f:
             row = json.loads(line)
 
@@ -60,11 +66,11 @@ def main():
 
             parsed_rows.append(parsed)
 
-    with open(OUTPUT_PATH, "w") as out:
+    with open(output_path, "w") as out:
         for row in parsed_rows:
             out.write(json.dumps(row) + "\n")
 
-    print(f"Saved parsed output to {OUTPUT_PATH}")
+    print(f"Saved parsed output to {output_path}")
 
 
 if __name__ == "__main__":
