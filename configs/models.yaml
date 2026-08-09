@@ -1,0 +1,61 @@
+# Arm definitions for the 6-way FraudOps-Bench comparison.
+# flow: direct | linear | agentic | classical_ml
+# backend: anthropic | ollama | (none, for classical_ml)
+arms:
+  direct_control:
+    flow: direct
+    backend: anthropic
+    model: claude-sonnet-5
+
+  linear_api:
+    flow: linear
+    backend: anthropic
+    model: claude-sonnet-5
+
+  linear_local:
+    flow: linear
+    backend: ollama
+    model: qwen2.5:14b-instruct
+
+  agentic_api:
+    flow: agentic
+    backend: anthropic
+    model: claude-sonnet-5
+
+  agentic_local:
+    flow: agentic
+    backend: ollama
+    model: qwen2.5:14b-instruct
+
+  classical_ml:
+    flow: classical_ml
+    model: hgb # or logreg
+
+  # Optional stretch arm: params-scaling comparison point, zero download
+  # cost (already pulled). Not part of the core 6-arm comparison.
+  linear_local_7b:
+    flow: linear
+    backend: ollama
+    model: qwen2.5:7b-instruct
+
+backend_defaults:
+  anthropic:
+    # claude-sonnet-5 writes verbose, fully-cited evidence_used/risk_indicators
+    # entries on the linear/agentic prompts (which include full tool-evidence
+    # text) -- 2048 truncated responses mid-JSON in testing. 4096 stays well
+    # under the ~16K non-streaming timeout risk while giving it room to finish.
+    max_tokens: 4096
+    # NOTE: temperature/top_p/top_k are intentionally omitted. claude-sonnet-5
+    # and claude-opus-5 return 400 if these are set to non-default values.
+  ollama:
+    temperature: 0.0
+    num_ctx: 8192
+    base_url: http://localhost:11434
+
+retry:
+  max_retries: 5
+  base_delay_s: 2.0
+  max_delay_s: 60.0
+
+# Documented swap for a final/expensive run once the pipeline is validated
+# cheaply on claude-sonnet-5. Edit an arm's `model` to "claude-opus-5" to use it.

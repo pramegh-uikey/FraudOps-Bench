@@ -1,38 +1,24 @@
-import json
-import re
 import argparse
+import json
 from pathlib import Path
+
+from parsing import extract_json
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-
-def extract_json(text):
-    text = text.strip()
-    text = re.sub(r"^```json", "", text)
-    text = re.sub(r"^```", "", text)
-    text = re.sub(r"```$", "", text)
-    text = text.strip()
-
-    start = text.find("{")
-    end = text.rfind("}")
-
-    if start == -1 or end == -1:
-        raise ValueError("No JSON object found")
-
-    return json.loads(text[start:end + 1])
+PASSTHROUGH_FIELDS = [
+    "arm", "flow", "backend", "model",
+    "latency_ms", "input_tokens", "output_tokens", "cost_usd", "tool_call_count",
+]
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--baseline", required=True, choices=["direct", "evidence"])
+    parser.add_argument("--arm", required=True)
     args = parser.parse_args()
 
-    if args.baseline == "direct":
-        input_path = PROJECT_ROOT / "outputs" / "direct_baseline_gemini.jsonl"
-        output_path = PROJECT_ROOT / "outputs" / "direct_baseline_parsed.jsonl"
-    else:
-        input_path = PROJECT_ROOT / "outputs" / "evidence_baseline_gemini.jsonl"
-        output_path = PROJECT_ROOT / "outputs" / "evidence_baseline_parsed.jsonl"
+    input_path = PROJECT_ROOT / "outputs" / f"{args.arm}.jsonl"
+    output_path = PROJECT_ROOT / "outputs" / f"{args.arm}_parsed.jsonl"
 
     parsed_rows = []
 
@@ -44,12 +30,13 @@ def main():
                 "case_id": row["case_id"],
                 "transaction_id": row["transaction_id"],
                 "ground_truth_is_fraud": row["ground_truth_is_fraud"],
-                "baseline": row["baseline"],
-                "model": row["model"],
-                "parse_status": "not_attempted"
+                "parse_status": "not_attempted",
             }
+            for field in PASSTHROUGH_FIELDS:
+                if field in row:
+                    parsed[field] = row[field]
 
-            if "raw_response" not in row:
+            if row.get("raw_response") is None:
                 parsed["parse_status"] = "no_raw_response"
                 parsed["error"] = row.get("error")
                 parsed_rows.append(parsed)

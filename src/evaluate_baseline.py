@@ -1,8 +1,9 @@
-import json
 import argparse
+import json
 from pathlib import Path
+
 import pandas as pd
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support, confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix, precision_recall_fscore_support
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,15 +20,11 @@ def map_disposition_to_pred(disposition):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--baseline", required=True, choices=["direct", "evidence"])
+    parser.add_argument("--arm", required=True)
     args = parser.parse_args()
 
-    if args.baseline == "direct":
-        input_path = PROJECT_ROOT / "outputs" / "direct_baseline_parsed.jsonl"
-        output_path = PROJECT_ROOT / "outputs" / "direct_baseline_metrics.csv"
-    else:
-        input_path = PROJECT_ROOT / "outputs" / "evidence_baseline_parsed.jsonl"
-        output_path = PROJECT_ROOT / "outputs" / "evidence_baseline_metrics.csv"
+    input_path = PROJECT_ROOT / "outputs" / f"{args.arm}_parsed.jsonl"
+    output_path = PROJECT_ROOT / "outputs" / f"{args.arm}_metrics.csv"
 
     rows = []
 
@@ -51,11 +48,14 @@ def main():
                 "risk_indicator_count": len(row.get("risk_indicators", [])),
                 "protective_indicator_count": len(row.get("protective_indicators", [])),
                 "missing_evidence_count": len(row.get("missing_evidence", [])),
+                "latency_ms": row.get("latency_ms"),
+                "cost_usd": row.get("cost_usd"),
+                "tool_call_count": row.get("tool_call_count"),
             })
 
     df = pd.DataFrame(rows)
 
-    print(f"\nBaseline: {args.baseline}")
+    print(f"\nArm: {args.arm}")
 
     print("\nParsed successful cases:")
     print(len(df))
@@ -66,6 +66,9 @@ def main():
 
     print("\nDisposition counts:")
     print(df["disposition"].value_counts(dropna=False))
+
+    print("\nMean cost/latency/tool-call-count:")
+    print(df[["latency_ms", "cost_usd", "tool_call_count"]].mean(numeric_only=True))
 
     decidable = df[df["predicted_is_fraud"].notna()].copy()
 

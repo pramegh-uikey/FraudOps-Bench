@@ -1,6 +1,14 @@
 pandas
 numpy
 google-genai
+anthropic
+pyyaml
+requests
 python-dotenv
 scikit-learn
+joblib
 tqdm
+langgraph
+langchain-core
+langchain-anthropic
+langchain-ollama

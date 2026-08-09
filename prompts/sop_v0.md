@@ -38,6 +38,14 @@ For every case, perform these checks:
    - Review device, browser, operating system, screen resolution, match flags, and identity flags.
    - Flag new, missing, inconsistent, or unusual identity signals.
 
+## Evidence attribution rules:
+
+- Card fraud fields must be attributed only to card_history.
+- Device fraud fields must be attributed only to device_history.
+- Email/domain fraud rates must be attributed only to email_domain_profile.
+- Velocity fields must be attributed only to velocity_summary.
+- Identity fields must be attributed only to identity_match_summary.
+
 ## Decision rules
 
 Choose REJECT only when there are multiple strong fraud indicators, such as:
