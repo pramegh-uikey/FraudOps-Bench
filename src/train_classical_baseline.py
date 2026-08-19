@@ -16,11 +16,13 @@ from sklearn.metrics import (
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+from splits import SPLITS, cases_path
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 TRANSACTION_PATH = PROJECT_ROOT / "data" / "raw" / "train_transaction.csv"
 IDENTITY_PATH = PROJECT_ROOT / "data" / "raw" / "train_identity.csv"
-CASES_PATH = PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v0_cases.jsonl"
+CASES_PATH = cases_path("dev")  # kept for backward-compat imports; see load_excluded_transaction_ids for all splits
 OUTPUT_DIR = PROJECT_ROOT / "outputs" / "classical_ml"
 
 C_COLS = [f"C{i}" for i in range(1, 15)]
@@ -32,12 +34,23 @@ ONE_HOT_COLS = ["ProductCD", "card4", "card6", "DeviceType"]
 FEATURE_COLUMNS_PATH = OUTPUT_DIR / "feature_columns.json"
 
 
-def load_pilot_transaction_ids() -> set[int]:
+def load_excluded_transaction_ids() -> set[int]:
+    """Union of transaction_ids across every benchmark split (dev,
+    calibration, holdout) -- the classical model must never train on a case
+    that any arm gets evaluated on, regardless of which split it's in.
+    Splits that haven't been generated yet (e.g. calibration/holdout before
+    generate_benchmark_cases.py has run) are skipped rather than erroring,
+    so this stays a drop-in replacement before those files exist.
+    """
     ids = set()
-    with open(CASES_PATH, "r") as f:
-        for line in f:
-            case = json.loads(line)
-            ids.add(case["transaction_id"])
+    for split in SPLITS:
+        path = cases_path(split)
+        if not path.exists():
+            continue
+        with open(path, "r") as f:
+            for line in f:
+                case = json.loads(line)
+                ids.add(case["transaction_id"])
     return ids
 
 
@@ -196,12 +209,12 @@ def main():
     print("Loading merged dataframe...")
     df = load_merged_dataframe()
 
-    pilot_ids = load_pilot_transaction_ids()
+    excluded_ids = load_excluded_transaction_ids()
     before = len(df)
-    df = df[~df["TransactionID"].isin(pilot_ids)].reset_index(drop=True)
-    print(f"Excluded {before - len(df)} pilot-case transactions from training "
-          f"(expected {len(pilot_ids)}).")
-    assert df["TransactionID"].isin(pilot_ids).sum() == 0, "pilot transaction IDs leaked into training data"
+    df = df[~df["TransactionID"].isin(excluded_ids)].reset_index(drop=True)
+    print(f"Excluded {before - len(df)} benchmark-case transactions (dev+calibration+holdout) "
+          f"from training (expected up to {len(excluded_ids)}).")
+    assert df["TransactionID"].isin(excluded_ids).sum() == 0, "benchmark transaction IDs leaked into training data"
 
     print("Building leakage-free features for all transactions...")
     X, y, feature_columns = build_features_for_all_transactions(df)

@@ -17,6 +17,7 @@ from typing_extensions import TypedDict
 from flow_types import FlowResult
 from llm_backends import ANTHROPIC_COST_PER_MTOK
 from parsing import strip_hidden_field
+from selective_prediction import DEFAULT_BAND, probability_to_disposition, resolve_with_second_opinion
 from tools import (
     get_transaction_details as _get_transaction_details,
     get_card_history as _get_card_history,
@@ -51,8 +52,30 @@ class SupervisorDecision(BaseModel):
     )
 
 
+class CheckVerdict(BaseModel):
+    check: str = Field(description="one of the 6 required checks from the SOP")
+    verdict: Literal["protective", "risk", "neutral"]
+    detail: str = Field(default="", description="the specific evidence behind this verdict")
+
+
 class Disposition(BaseModel):
-    disposition: Literal["APPROVE", "ESCALATE", "REJECT"]
+    check_verdicts: list[CheckVerdict] = Field(
+        description="an explicit protective/risk/neutral verdict for each of the 6 "
+                    "required checks, in order -- fill this in before deciding "
+                    "fraud_probability, not after"
+    )
+    fraud_probability: float = Field(
+        ge=0.0, le=1.0,
+        description="calibrated probability (0-1) that this transaction is fraud, based "
+                    "only on the evidence gathered. Follow the SOP's calibration scale -- "
+                    "a value near 0.5 is the correct answer when evidence is genuinely "
+                    "mixed or thin, not a failure to decide. Do not round toward a more "
+                    "confident-sounding number than the evidence supports.",
+    )
+    disposition: Literal["APPROVE", "ESCALATE", "REJECT"] = Field(
+        description="your own qualitative call, for reference -- the harness may "
+                    "override this using fraud_probability and a calibrated threshold"
+    )
     risk_indicators: list[str] = Field(default_factory=list)
     protective_indicators: list[str] = Field(default_factory=list)
     tools_used: list[str] = Field(default_factory=list)
@@ -110,7 +133,11 @@ CASE:
 EVIDENCE GATHERED (structured investigation memory):
 {memory_json}
 
-Produce the final disposition.
+Fill in check_verdicts for all 6 required checks first, then produce the
+final disposition. Follow the SOP's calibration scale for fraud_probability
+-- a value near 0.5 is correct when evidence is genuinely mixed or thin,
+not a failure to decide. Weigh convergence of multiple independent signals,
+not just whether any single risk indicator is present.
 """
 
 
@@ -223,6 +250,9 @@ def build_graph(
     required_checks = json.dumps(case.get("required_checks", []))
 
     max_retries = call_kwargs.get("max_retries", DEFAULT_MAX_RETRIES)
+    # See flows.py's _run_completion_flow for why this defaults True but
+    # should be disabled for zero-evidence arms.
+    self_consistency = call_kwargs.get("self_consistency", True)
 
     case_tools = _make_case_tools(transaction_id)
     llm_with_tools = (
@@ -304,9 +334,37 @@ def build_graph(
                 "messages": [AIMessage(content="")],
             }
 
+        # Self-consistency second opinion, gated on the escalate band: only
+        # spends an extra call when the first estimate is genuinely
+        # ambiguous. Two independent estimates agreeing on direction is
+        # stronger evidence than either one alone.
+        def _second_opinion() -> float:
+            result2 = finalize_llm.invoke(prompt)
+            _log_usage(result2["raw"])
+            d2 = result2["parsed"]
+            return d2.fraud_probability if d2 is not None else disposition.fraud_probability
+
+        if self_consistency:
+            final_p, used_second_opinion, p2 = resolve_with_second_opinion(
+                disposition.fraud_probability, _second_opinion, DEFAULT_BAND
+            )
+        else:
+            final_p, used_second_opinion, p2 = disposition.fraud_probability, False, None
+
+        disposition_dict = disposition.model_dump()
+        disposition_dict["disposition_raw"] = disposition_dict["disposition"]
+        if used_second_opinion:
+            disposition_dict["self_consistency_check"] = {
+                "triggered": True,
+                "first_probability": disposition.fraud_probability,
+                "second_opinion_probability": p2,
+            }
+            disposition_dict["fraud_probability"] = final_p
+        disposition_dict["disposition"] = probability_to_disposition(final_p, DEFAULT_BAND)
+
         return {
-            "final_disposition": disposition.model_dump(),
-            "messages": [AIMessage(content=json.dumps(disposition.model_dump()))],
+            "final_disposition": disposition_dict,
+            "messages": [AIMessage(content=json.dumps(disposition_dict))],
         }
 
     def route_after_brain(state: AgentState) -> str:

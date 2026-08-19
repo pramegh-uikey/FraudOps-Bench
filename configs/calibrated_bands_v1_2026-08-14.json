@@ -1,0 +1,41 @@
+{
+  "linear_api": {
+    "band": [
+      0.35,
+      0.65
+    ],
+    "frozen_at": "2026-08-14T07:07:49.713973+00:00",
+    "metadata": {
+      "calibration_n": 120,
+      "target_risk": 0.15,
+      "cv_accuracy": 0.9091117216117215,
+      "cv_coverage": 0.5666666666666667
+    }
+  },
+  "agentic_api": {
+    "band": [
+      0.45,
+      0.55
+    ],
+    "frozen_at": "2026-08-14T07:07:49.728218+00:00",
+    "metadata": {
+      "calibration_n": 120,
+      "target_risk": 0.15,
+      "cv_accuracy": 0.8572463768115941,
+      "cv_coverage": 0.9916666666666668
+    }
+  },
+  "classical_ml": {
+    "band": [
+      0.45,
+      0.55
+    ],
+    "frozen_at": "2026-08-14T07:07:49.740134+00:00",
+    "metadata": {
+      "calibration_n": 120,
+      "target_risk": 0.15,
+      "cv_accuracy": 0.8607048748353096,
+      "cv_coverage": 0.95
+    }
+  }
+}

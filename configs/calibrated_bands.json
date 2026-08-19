@@ -1,0 +1,47 @@
+{
+  "linear_api": {
+    "band": [
+      0.35,
+      0.65
+    ],
+    "frozen_at": "2026-08-18T09:40:22.787249+00:00",
+    "metadata": {
+      "calibration_n": 120,
+      "target_risk": 0.15,
+      "lcb_cv_accuracy": 0.877647484530666,
+      "mean_cv_accuracy": 0.9091117216117215,
+      "total_decided": 68,
+      "methodology_version": "v2_lcb_fixed_calibrate_band"
+    }
+  },
+  "agentic_api": {
+    "band": [
+      0.25,
+      0.75
+    ],
+    "frozen_at": "2026-08-18T09:40:22.803270+00:00",
+    "metadata": {
+      "calibration_n": 120,
+      "target_risk": 0.15,
+      "lcb_cv_accuracy": 0.8951666666666667,
+      "mean_cv_accuracy": 0.95,
+      "total_decided": 32,
+      "methodology_version": "v2_lcb_fixed_calibrate_band"
+    }
+  },
+  "classical_ml": {
+    "band": [
+      0.35,
+      0.65
+    ],
+    "frozen_at": "2026-08-18T09:40:22.816587+00:00",
+    "metadata": {
+      "calibration_n": 120,
+      "target_risk": 0.15,
+      "lcb_cv_accuracy": 0.8642899158545849,
+      "mean_cv_accuracy": 0.8971221532091096,
+      "total_decided": 105,
+      "methodology_version": "v2_lcb_fixed_calibrate_band"
+    }
+  }
+}

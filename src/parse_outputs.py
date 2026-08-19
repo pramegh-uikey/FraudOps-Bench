@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from parsing import extract_json
+from splits import arm_output_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,10 +16,12 @@ PASSTHROUGH_FIELDS = [
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--arm", required=True)
+    parser.add_argument("--split", choices=["dev", "calibration", "holdout", "holdout_v2"], default="dev")
+    parser.add_argument("--run-tag", default=None)
     args = parser.parse_args()
 
-    input_path = PROJECT_ROOT / "outputs" / f"{args.arm}.jsonl"
-    output_path = PROJECT_ROOT / "outputs" / f"{args.arm}_parsed.jsonl"
+    input_path = arm_output_path(args.split, args.arm, args.run_tag, suffix=".jsonl")
+    output_path = arm_output_path(args.split, args.arm, args.run_tag, suffix="_parsed.jsonl")
 
     parsed_rows = []
 

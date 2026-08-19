@@ -116,9 +116,17 @@ def call_anthropic(
             in_rate, out_rate = ANTHROPIC_COST_PER_MTOK[model]
             cost_usd = (input_tokens * in_rate + output_tokens * out_rate) / 1_000_000
 
+        # A response with no text block (e.g. hit max_tokens before any text
+        # was emitted) must surface as an error, not a silent raw_text=None
+        # success -- otherwise it's undiagnosable and looks identical to a
+        # genuine empty-response bug.
+        error = None if text is not None else (
+            f"Anthropic response contained no text block (stop_reason={response.stop_reason})"
+        )
+
         return LLMCallResult(
             raw_text=text,
-            error=None,
+            error=error,
             latency_ms=latency_ms,
             input_tokens=input_tokens,
             output_tokens=output_tokens,

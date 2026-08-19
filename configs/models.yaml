@@ -6,6 +6,11 @@ arms:
     flow: direct
     backend: anthropic
     model: claude-sonnet-5
+    # No case-specific evidence exists in this arm, so two draws "agreeing"
+    # near the neutral anchor (0.5) is the model honestly reporting "no
+    # signal" twice, not corroborated confidence -- self-consistency's
+    # premise doesn't hold here. See flows.py's _run_completion_flow.
+    self_consistency: false
 
   linear_api:
     flow: linear
@@ -42,9 +47,14 @@ backend_defaults:
   anthropic:
     # claude-sonnet-5 writes verbose, fully-cited evidence_used/risk_indicators
     # entries on the linear/agentic prompts (which include full tool-evidence
-    # text) -- 2048 truncated responses mid-JSON in testing. 4096 stays well
-    # under the ~16K non-streaming timeout risk while giving it room to finish.
-    max_tokens: 4096
+    # text), and the tightened SOP (naming the specific check that justifies
+    # ESCALATE, plus check_verdicts detail per required check) makes
+    # reasoning longer still -- 4096 truncated ~20% of linear_api responses
+    # mid-JSON, and 6144 still truncated 8/120 (6.7%) on the calibration
+    # split (output_tokens hit exactly 6144 on every failure -- confirmed
+    # truncation, not random parse noise). 8192 stays well under the ~16K
+    # non-streaming timeout risk while giving real headroom.
+    max_tokens: 8192
     # NOTE: temperature/top_p/top_k are intentionally omitted. claude-sonnet-5
     # and claude-opus-5 return 400 if these are set to non-default values.
   ollama:

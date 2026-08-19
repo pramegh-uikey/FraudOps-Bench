@@ -1,3 +1,4 @@
+import argparse
 import json
 import math
 import numpy as np
@@ -13,11 +14,9 @@ from tools import (
     get_velocity_summary,
     get_identity_match_summary,
 )
+from splits import cases_path, evidence_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-CASES_PATH = PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v0_cases.jsonl"
-OUTPUT_PATH = PROJECT_ROOT / "outputs" / "evidence_packets_50.jsonl"
 
 
 def load_jsonl(path):
@@ -75,17 +74,22 @@ def build_evidence_packet(case):
 
 
 def main():
-    cases = load_jsonl(CASES_PATH)
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--split", choices=["dev", "calibration", "holdout", "holdout_v2"], default="dev")
+    args = parser.parse_args()
 
-    with open(OUTPUT_PATH, "w") as out:
+    cases = load_jsonl(cases_path(args.split))
+    output_path = evidence_path(args.split)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, "w") as out:
         for idx, case in enumerate(cases, start=1):
             print(f"Generating evidence packet {idx}/{len(cases)}: {case['case_id']}")
             packet = build_evidence_packet(case)
             packet = make_json_safe(packet)
             out.write(json.dumps(packet, allow_nan=False) + "\n")
 
-    print(f"Saved evidence packets to {OUTPUT_PATH}")
+    print(f"Saved evidence packets to {output_path}")
 
 
 if __name__ == "__main__":

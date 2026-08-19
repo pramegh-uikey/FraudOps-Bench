@@ -7,11 +7,11 @@ from tqdm import tqdm
 
 from config import get_arm_config, load_models_config
 from flows import run_agentic, run_direct, run_linear
+from freeze_methodology import verify_manifest
+from splits import arm_output_path, cases_path, evidence_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-CASES_PATH = PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v0_cases.jsonl"
-EVIDENCE_PATH = PROJECT_ROOT / "outputs" / "evidence_packets_50.jsonl"
 SOP_PATH = PROJECT_ROOT / "prompts" / "sop_v0.md"
 
 FLOW_RUNNERS = {
@@ -23,6 +23,7 @@ FLOW_RUNNERS = {
 CALL_KWARG_KEYS = {
     "max_tokens", "temperature", "num_ctx", "base_url",
     "max_retries", "base_delay_s", "max_delay_s",
+    "self_consistency",
 }
 
 
@@ -55,12 +56,37 @@ def load_existing_rows(output_path: Path) -> list[dict]:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--arm", required=True)
+    parser.add_argument("--split", choices=["dev", "calibration", "holdout", "holdout_v2"], default="dev")
+    parser.add_argument("--run-tag", default=None,
+                         help="tag appended to the output filename, for repeat runs on the same split "
+                              "(variance estimation) without overwriting a previous run")
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--case-ids", default=None,
                          help="comma-separated case_id list to run instead of --limit")
     parser.add_argument("--output", default=None)
     parser.add_argument("--config", default=None)
+    parser.add_argument("--force", action="store_true",
+                         help="bypass the holdout frozen-methodology guard (loud, logged override)")
+    parser.add_argument("--override-self-consistency", choices=["true", "false"], default=None,
+                         help="force self_consistency on/off regardless of configs/models.yaml, "
+                              "for ablation runs (e.g. --run-tag no_sc)")
     args = parser.parse_args()
+
+    is_holdout_split = args.split in ("holdout", "holdout_v2")
+    if is_holdout_split and not args.force:
+        ok, message = verify_manifest()
+        if not ok:
+            raise SystemExit(
+                f"Refusing to run --split {args.split}: {message}\n"
+                "Holdout sets are single-use for final reporting -- they must only be run "
+                "against a methodology that's been frozen with freeze_methodology.py, so the "
+                "results can't be quietly re-tuned after a peek. Pass --force to override "
+                "(this will be obvious in the run, not silent)."
+            )
+        print(f"Holdout methodology check: {message}")
+    elif is_holdout_split and args.force:
+        print(f"!!! --force: bypassing the frozen-methodology guard for a {args.split} run. "
+              "This run's results are NOT protected against post-hoc tuning leakage. !!!")
 
     config = load_models_config(args.config) if args.config else load_models_config()
     arm_config = get_arm_config(args.arm, config)
@@ -77,16 +103,19 @@ def main():
     backend = arm_config["backend"]
     model = arm_config["model"]
     call_kwargs = {k: v for k, v in arm_config.items() if k in CALL_KWARG_KEYS}
+    if args.override_self_consistency is not None:
+        call_kwargs["self_consistency"] = args.override_self_consistency == "true"
+        print(f"Overriding self_consistency={call_kwargs['self_consistency']} for this run (ablation).")
 
-    output_path = Path(args.output) if args.output else PROJECT_ROOT / "outputs" / f"{args.arm}.jsonl"
+    output_path = Path(args.output) if args.output else arm_output_path(args.split, args.arm, args.run_tag)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     sop_text = load_text(SOP_PATH)
 
     if flow == "linear":
-        items = load_jsonl(EVIDENCE_PATH)
+        items = load_jsonl(evidence_path(args.split))
     else:
-        items = load_jsonl(CASES_PATH)
+        items = load_jsonl(cases_path(args.split))
 
     if args.case_ids:
         wanted = set(args.case_ids.split(","))

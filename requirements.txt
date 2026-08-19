@@ -12,3 +12,5 @@ langgraph
 langchain-core
 langchain-anthropic
 langchain-ollama
+scipy
+matplotlib

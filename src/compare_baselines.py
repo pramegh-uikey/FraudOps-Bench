@@ -2,12 +2,14 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
+from config import load_models_config
+from splits import outputs_dir
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-OUTPUTS_DIR = PROJECT_ROOT / "outputs"
-DEFAULT_REPORT_PATH = OUTPUTS_DIR / "comparison_report.md"
 
 # Pairwise comparisons worth printing in full, when both sides are present.
 KEY_COMPARISONS = [
@@ -27,15 +29,44 @@ WORKFLOW_COLS = [
 ]
 
 
-def discover_arms() -> list[str]:
-    return sorted(
-        p.stem[: -len("_metrics")]
-        for p in OUTPUTS_DIR.glob("*_metrics.csv")
-    )
+def _known_arm_names() -> list[str]:
+    return sorted(load_models_config()["arms"].keys())
 
 
-def load_arm(arm: str) -> pd.DataFrame:
-    df = pd.read_csv(OUTPUTS_DIR / f"{arm}_metrics.csv")
+def group_metrics_files_by_arm(split: str) -> dict[str, list[Path]]:
+    """Maps each known arm name to every {arm}[_{run_tag}]_metrics.csv file
+    present for this split, so repeat runs (different --run-tag) are
+    aggregated instead of treated as unrelated arms. Matching is against
+    the arm names in configs/models.yaml since arm names themselves can
+    contain underscores, making pure filename-splitting ambiguous."""
+    files = sorted(outputs_dir(split).glob("*_metrics.csv"))
+    stems = {p: p.stem[: -len("_metrics")] for p in files}
+
+    grouped: dict[str, list[Path]] = {}
+    for path, stem in stems.items():
+        for arm in _known_arm_names():
+            if stem == arm or stem.startswith(f"{arm}_"):
+                grouped.setdefault(arm, []).append(path)
+                break
+        else:
+            # Not a recognized arm name (e.g. config changed since the run) --
+            # still surface it standalone under its raw stem.
+            grouped.setdefault(stem, []).append(path)
+
+    return grouped
+
+
+def discover_arms(split: str = "dev") -> list[str]:
+    return sorted(group_metrics_files_by_arm(split).keys())
+
+
+def load_arm(split: str, arm: str, files_by_arm: dict[str, list[Path]] | None = None) -> pd.DataFrame:
+    """Pooled dataframe across every repeat-run file for this arm (single
+    file when there are no repeats)."""
+    if files_by_arm is None:
+        files_by_arm = group_metrics_files_by_arm(split)
+    frames = [pd.read_csv(p) for p in files_by_arm[arm]]
+    df = pd.concat(frames, ignore_index=True)
     df["arm"] = arm
     return df
 
@@ -93,25 +124,30 @@ def _df_to_markdown(df: pd.DataFrame, index_label: str = "") -> str:
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--split", choices=["dev", "calibration", "holdout", "holdout_v2"], default="dev")
     parser.add_argument("--arms", default=None,
-                         help="comma-separated arm names (default: every outputs/*_metrics.csv)")
-    parser.add_argument("--save", default=str(DEFAULT_REPORT_PATH),
-                         help=f"path to write the markdown report to (default: {DEFAULT_REPORT_PATH})")
+                         help="comma-separated arm names (default: every outputs/{split}/*_metrics.csv)")
+    parser.add_argument("--save", default=None,
+                         help="path to write the markdown report to (default: outputs/{split}/comparison_report.md)")
     parser.add_argument("--no-save", action="store_true", help="print only, don't write a report file")
     args = parser.parse_args()
 
-    arms = args.arms.split(",") if args.arms else discover_arms()
+    split_outputs_dir = outputs_dir(args.split)
+    default_report_path = split_outputs_dir / "comparison_report.md"
+
+    files_by_arm = group_metrics_files_by_arm(args.split)
+    arms = args.arms.split(",") if args.arms else sorted(files_by_arm.keys())
 
     if not arms:
-        print("No arm metrics found under outputs/*_metrics.csv")
+        print(f"No arm metrics found under {split_outputs_dir}/*_metrics.csv")
         return
 
     frames = {}
     for arm in arms:
-        try:
-            frames[arm] = load_arm(arm)
-        except FileNotFoundError:
-            print(f"Skipping '{arm}': outputs/{arm}_metrics.csv not found")
+        if arm not in files_by_arm:
+            print(f"Skipping '{arm}': no {split_outputs_dir}/{arm}*_metrics.csv found")
+            continue
+        frames[arm] = load_arm(args.split, arm, files_by_arm)
 
     if not frames:
         return
@@ -148,8 +184,50 @@ def main():
     print(summary_df)
     report_sections.append(("Aggregate metrics per arm", _df_to_markdown(summary_df, index_label="arm")))
 
+    faithfulness_rows = []
+    for arm in frames:
+        fpath = split_outputs_dir / f"{arm}_faithfulness.csv"
+        if not fpath.exists():
+            continue
+        fdf = pd.read_csv(fpath)
+        with_claims = fdf[fdf["n_claimed_numbers"] > 0]
+        faithfulness_rows.append({
+            "arm": arm,
+            "n_cases_scored": len(fdf),
+            "mean_verified_rate": with_claims["verified_rate"].mean() if len(with_claims) else None,
+            "cases_with_unverified_claim": int((fdf["n_unverified"] > 0).sum()),
+            "uninformative_citations": int(fdf["n_uninformative_citations"].sum()),
+        })
+    if faithfulness_rows:
+        faithfulness_df = pd.DataFrame(faithfulness_rows).set_index("arm")
+        print("\nFaithfulness (evidence-attribution scoring, where available):")
+        print(faithfulness_df)
+        report_sections.append(("Faithfulness (evidence-attribution scoring)",
+                                 _df_to_markdown(faithfulness_df, index_label="arm")))
+
+    repeat_arms = {arm: paths for arm, paths in files_by_arm.items() if arm in frames and len(paths) > 1}
+    if repeat_arms:
+        variance_rows = []
+        for arm, paths in repeat_arms.items():
+            per_run = [summarize_arm(pd.read_csv(p)) for p in paths]
+            row = {"arm": arm, "n_runs": len(per_run)}
+            for metric in ["accuracy", "precision", "recall", "f1"]:
+                values = [r[metric] for r in per_run if r[metric] is not None]
+                row[f"{metric}_mean"] = float(np.mean(values)) if values else None
+                row[f"{metric}_std"] = float(np.std(values)) if len(values) > 1 else None
+            variance_rows.append(row)
+        variance_df = pd.DataFrame(variance_rows).set_index("arm")
+        print(f"\nRepeat-run variance ({len(repeat_arms)} arm(s) with >1 run):")
+        print(variance_df)
+        report_sections.append(("Repeat-run variance across --run-tag repeats", _df_to_markdown(variance_df, index_label="arm")))
+
     for arm_a, arm_b in KEY_COMPARISONS:
         if arm_a not in frames or arm_b not in frames:
+            continue
+        if arm_a in repeat_arms or arm_b in repeat_arms:
+            # Per-case merge isn't meaningful across pooled repeat runs
+            # (case_id repeats once per run) -- skip, variance section above
+            # already covers these arms.
             continue
 
         common = frames[arm_a].merge(
@@ -170,7 +248,7 @@ def main():
     if args.no_save:
         return
 
-    save_path = Path(args.save)
+    save_path = Path(args.save) if args.save else default_report_path
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [

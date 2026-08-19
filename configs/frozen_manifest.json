@@ -1,0 +1,13 @@
+{
+  "frozen_at": "2026-08-18T09:42:07.336838+00:00",
+  "git_commit": "000340e31c39a4b18db81e0f94dfee0050bccc37",
+  "git_dirty": true,
+  "label": "v2-fixed-calibrate-band-holdout-v2",
+  "file_hashes": {
+    "prompts/sop_v0.md": "0ffec8b7d2071429bf64eb44340350687293d66eb55df99f0f0674505105a2cf",
+    "configs/models.yaml": "8ffc93fddbd7fda34298fcfa66742f5c43f39d6ff77df45ed4454b3ad6818d3e",
+    "src/flows.py": "4220f9e6246476a5bee5af9254f2b22e190dd73b2d941cdb5d46f05deba40c6c",
+    "src/agentic_graph.py": "10c4d57b15451a0e28507fc3d99f08651783b67feb521962704cb525ad91a77a",
+    "src/selective_prediction.py": "0f3177b889b9264a77c1a408d82b419e7d2ff794b3f16fbb33cc4c6e791c6676"
+  }
+}
