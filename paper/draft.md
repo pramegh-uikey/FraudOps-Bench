@@ -1,4 +1,4 @@
-# FraudOps-Bench: Process-Level Evaluation of LLM Agents for Fraud-Analyst Emulation, and a Calibration Failure Mode Worth Knowing About
+# FraudOps-Bench: Process-Level, Tool-Grounded Evaluation of LLM Agents for Card-Not-Present Fraud Investigation, and a Calibration Failure Mode Worth Knowing About
 
 **Status: DRAFT.** Every number in this document is traceable to a file
 under `outputs/` or `docs/methodology_log.md` in this repository. No
@@ -36,15 +36,69 @@ prediction with LLM confidence scores on small calibration sets.
 
 ## 1. Introduction
 
-[Framing note for the author: open with the gap between "LLM classifies
-fraud transactions" (saturated, low novelty per the literature survey)
-and "LLM agent emulates the *investigation process*" (the identified
-white space). State the three-part contribution: (1) a process-level
-benchmark with a real tool-grounded agent, not a classification wrapper;
-(2) an honest before/after account of a calibration failure and its fix,
-validated on independent data, which is itself a methodological
-contribution for selective prediction with LLMs; (3) faithfulness and
-error-taxonomy analysis that goes beyond outcome accuracy.]
+Fraud remains a large and continuous operational burden on financial
+institutions. The Association of Certified Fraud Examiners' 2024 *Report
+to the Nations* documents thousands of occupational-fraud cases spanning
+138 countries and territories [1], and UK Finance's own H1 2025 figures
+report 2.09 million confirmed fraud cases and £629.3 million stolen in
+just six months [2] -- a reminder that the review queues behind these
+numbers are large, continuous, and staffed by human analysts working
+under time pressure.
+
+Large language models are an obvious candidate to help with this queue,
+and a growing body of recent work has tested whether an LLM can classify
+a transaction as fraudulent as well as a classical model trained on
+standard public benchmarks such as IEEE-CIS [3]. That question is close
+to saturated: public fraud datasets are anonymized and feature-engineered
+for tabular models rather than investigative reasoning, and the strongest
+recent public-data-only result along these lines, FinFRE-RAG [4], still
+frames the task as transaction-level risk scoring rather than the
+workflow a human fraud analyst actually performs.
+
+That workflow looks different from classification. A real analyst does
+not receive a fully assembled feature vector; they receive an alert, then
+decide what evidence to pull -- card history, device history, prior
+velocity, identity-match signals -- before reasoning under an
+institution's standard operating procedure (SOP) toward a disposition:
+approve, escalate, or reject, with a citable rationale. Emulating that
+*process*, not just its final label, is the harder and less-studied
+problem. The closest published attempt is the FAA framework [5], which
+wraps GPT-4o's Assistants API around a multi-agent investigation pipeline
+and reports very strong F1 (0.98-0.99) on synthetic Sparkov/CCTD data --
+but on a limited, mostly synthetic sample, without a process-level
+evaluation of when the system should defer to a human rather than commit
+to a label. The nearest behavioral analogues to a tool-grounded,
+policy-constrained investigation agent come not from fraud but from
+security operations: CORTEX [6] and SIABench [7] both evaluate
+multi-agent, tool-using triage over auditable evidence, but on non-public
+data and in a different operational domain. General-purpose agent
+benchmarks -- SOP-Bench [8], τ-bench [9], IntellAgent [10] -- supply the
+methodological template for evaluating long-horizon, policy-heavy,
+tool-using agents, but none target fraud operations specifically.
+
+No existing public work, to our knowledge, combines (a) public fraud
+data, (b) a tool-grounded agent that gathers its own evidence rather than
+receiving it pre-assembled, and (c) a process-level, auditable evaluation
+that asks not just "was the label right" but "should this system have
+committed to a label at all." That is the gap FraudOps-Bench targets.
+
+Building and evaluating such a system surfaced a second, independently
+interesting result. Selective prediction -- escalating low-confidence
+cases to a human rather than forcing a decision -- is the natural
+evaluation frame for this kind of agent, since a fraud-review system that
+is wrong with full confidence is far more costly than one that is honest
+about uncertainty. Doing this well requires calibrating a decision
+threshold against a labeled set, and we found, by first getting it wrong,
+that LLM-generated confidence scores are not the well-behaved continuous
+outputs classical calibration methods assume: they cluster heavily on
+round, prompt-anchored values, and a threshold selected against a small
+calibration set can badly overfit that clustering in a way that only
+shows up on a much larger, independent holdout. We diagnose this failure
+precisely, fix it, and validate the fix on a second, disjoint holdout
+set -- and we report the failure mode itself as a first-class
+contribution, since it is a risk any selective-prediction pipeline built
+on LLM confidence scores over a modestly sized calibration set is likely
+to share.
 
 **Contributions:**
 1. FraudOps-Bench: a public-data (IEEE-CIS), tool-grounded, LangGraph-based
@@ -63,38 +117,96 @@ error-taxonomy analysis that goes beyond outcome accuracy.]
 4. An ablation isolating the contribution of a self-consistency mechanism
    to the agent's calibrated probability estimates.
 
+The rest of the paper proceeds as follows. Section 2 positions this work
+against prior fraud-LLM and agent-benchmark literature. Section 3
+describes FraudOps-Bench's design. Section 4 reports a two-method
+faithfulness evaluation of the LLM arms' cited evidence. Section 5 is the
+central empirical contribution: the calibration failure, its diagnosis,
+fix, and validation. Section 6 reports a self-consistency ablation.
+Section 7 reports cost and latency. Section 8 discusses implications,
+Section 9 states limitations directly, and Section 10 concludes.
+
 ## 2. Related Work
 
-[Author note: draw directly from `literature_survey/deep-research-report.md`,
-sections "Prior work and evidence" and "Data, tools, and benchmark
-landscape." Key positioning points to hit:]
+**Fraud-specific LLM work.** The Fraud Dataset Benchmark [3] established
+the standard public-data infrastructure this line of work builds on,
+standardizing IEEE-CIS to a 561,013/28,527 train/test split over 67
+retained features and explicitly cataloguing the limitations of public
+fraud data -- sparse identity fields, no case notes, no institutional
+history -- that any LLM system built on it inherits. Within that
+constraint, FinFRE-RAG [4] is the cleanest recent demonstration that
+public-data-only LLM fraud scoring can be substantially improved by
+retrieval and feature reduction, but it remains transaction-level risk
+scoring, not investigative workflow: the model receives a feature vector,
+not an alert it must build a case around.
 
-- The closest direct prior art is the **FAA framework** (GPT-4o + tools +
-  report generation on Sparkov/CCTD), which reports very strong F1 but on
-  limited, mostly synthetic samples without a process-level or
-  selective-prediction evaluation.
-- **FinFRE-RAG** demonstrates public-data-only LLM fraud scoring gains via
-  retrieval, but remains transaction-level scoring, not workflow emulation.
-- **CORTEX** and **SIABench** are the closest behavioral analogues (multi-
-  agent, tool-grounded, auditable investigation) but in security operations,
-  not fraud, and on non-public data.
-- **SOP-Bench**, **τ-bench** provide the methodological template for
-  policy-heavy, long-horizon agent evaluation this work adapts to fraud
-  operations.
-- The literature survey's own conclusion: no existing public work combines
-  public fraud data + synthetic workflow + tool-grounded agent +
-  auditable process-level scoring. This is the gap FraudOps-Bench targets.
-- Distinguish explicitly from "LLM vs. XGBoost on IEEE-CIS" work (FDB,
-  standard classification papers) -- this paper's contribution is the
-  process/selective-prediction framing and the calibration failure
-  analysis, not a classification leaderboard entry.
+The closest direct prior art to FraudOps-Bench is the FAA framework [5],
+which wraps GPT-4o's Assistants API around a multi-agent pipeline --
+planning, evidence gathering, analysis, and report generation, with an
+optional vision agent -- and reports very strong F1 (0.9801 on Sparkov,
+0.99 on CCTD) across 500 evaluated transactions, with investigations
+averaging 5.5-7 steps. This is the paper closest in spirit to "an LLM
+agent investigates a fraud case," but it evaluates on a limited, mostly
+synthetic sample and does not report a process-level or
+selective-prediction evaluation -- there is no notion, in that
+evaluation, of the system declining to commit to a disposition.
+
+**Behavioral analogues outside fraud.** The strongest evidence that
+tool-grounded, multi-agent decomposition helps on auditable, high-stakes
+investigation work comes not from fraud but from security operations.
+CORTEX [6] shows a multi-agent SOC-triage system improving actionable F1
+from 0.66 to 0.78 and cutting false-positive rate from 24.9% to 14.2%
+over a single-agent baseline, on real production workflow traces.
+SIABench [7] evaluates frontier models on deep, tool-executing
+security-incident-analysis workflows and finds they still fail a large
+fraction of long-context scenarios (GPT-4o failed 11 of 25 in one
+setting) -- direct evidence that process-level, tool-grounded evaluation
+surfaces failure modes that outcome-only scoring hides. Both operate on
+non-public data in a different operational domain from fraud, but both
+are closer behavioral analogues to what FraudOps-Bench measures than any
+fraud-specific paper we found.
+
+**Agent-evaluation methodology.** SOP-Bench [8], τ-bench [9], and
+IntellAgent [10] supply the methodological template this paper adapts to
+fraud operations: long-horizon, policy-constrained, tool-using agent
+evaluation, as distinct from single-turn QA. SOP-Bench in particular
+shows that larger tool registries can hurt task success (37% vs. 20.8%
+task-success rate in one ablation) -- a caution directly relevant to
+FraudOps-Bench's six-tool design. The Berkeley Function-Calling
+Leaderboard [11] evaluates the narrower function/tool-calling capability
+these systems depend on. FraudOps-Bench's agentic arm is implemented on
+LangGraph [15], one of several general-purpose multi-agent orchestration
+frameworks in current use alongside AutoGen [14] and CrewAI [16]; none of
+these frameworks target fraud operations specifically, and none ship an
+evaluation protocol beyond their own tool-calling correctness.
+
+**Adjacent public fraud datasets.** BAF [12] and AMLworld [13] are the
+strongest synthetic-from-real alternatives to IEEE-CIS for future
+extensions of this benchmark -- BAF in particular would extend
+FraudOps-Bench to account-opening fraud, a structurally different
+investigation shape from the card-not-present setting studied here
+(Section 10).
+
+**Positioning.** Distinguishing this paper from the saturated "LLM vs.
+classical ML on IEEE-CIS" classification literature [3], [4] is
+deliberate: FraudOps-Bench's contribution is not a new state-of-the-art
+classification number, but a process-level, tool-grounded evaluation
+protocol -- including an honest selective-prediction failure mode and its
+fix -- applied to a domain that, to our knowledge, no existing public
+benchmark combines with a genuinely tool-grounded, multi-step
+investigation agent.
 
 ## 3. FraudOps-Bench Design
 
 ### 3.1 Task and data
 
-Card-not-present transaction risk review over IEEE-CIS Kaggle fraud data.
-Each case exposes a visible alert summary (amount, product code, card
+Card-not-present transaction risk review over IEEE-CIS Kaggle fraud data
+[17], the same underlying dataset the Fraud Dataset Benchmark [3] uses as
+its richest public-data testbed; FraudOps-Bench draws its own
+dev/calibration/holdout splits directly from the raw competition data
+(Section 3.4) rather than reusing FDB's fixed train/test split, since our
+evaluation needs disjoint labeled subsets for calibration and repeated
+holdout use rather than a single fixed split. Each case exposes a visible alert summary (amount, product code, card
 type, purchaser/recipient email domain, device type) and, for evidence-
 bearing arms, access to six tools mirroring what a real fraud analyst's
 case-management tooling would expose: `get_transaction_details`,
@@ -122,7 +234,7 @@ Limitations) are not part of this report's headline comparisons beyond
 Every LLM arm outputs a calibrated `fraud_probability`. Disposition
 (APPROVE/ESCALATE/REJECT) is a deterministic function of that probability
 against a per-arm band, not a free-form model choice -- the standard
-selective-prediction (Chow's rule) risk-coverage framing: fix an
+selective-prediction (Chow's rule [18]) risk-coverage framing: fix an
 acceptable error rate on decided cases, escalate the rest. The SOP
 explicitly instructs the model on a calibration scale (0.0-0.15 no
 signal, 0.35-0.65 genuinely mixed evidence, 0.85-1.0 strong convergent
@@ -156,8 +268,9 @@ fix was frozen.
 
 ## 4. Faithfulness Evaluation
 
-[Author note: two independent methods, both described in
-`docs/methodology_log.md` 2026-08-14 and 2026-08-18 entries.]
+Two independent methods, both described in `docs/methodology_log.md`'s
+2026-08-14 and 2026-08-18 entries, are used to check whether an arm's
+cited reasoning is actually grounded in the evidence it retrieved.
 
 **Method 1 -- deterministic numeric cross-referencing.** Extracts every
 numeric claim from an arm's cited evidence (`evidence_used`,
@@ -195,6 +308,30 @@ Band selection via 5-fold cross-validated accuracy on the calibration
 split initially favored a very narrow escalate band for `agentic_api`,
 (0.45, 0.55), yielding 85.7% accuracy at 99% coverage -- appearing
 competitive with `classical_ml` (86.0% accuracy, 95% coverage).
+
+### 5.1a Repeat-run variance (stochasticity check)
+
+Before diagnosing the holdout regression (Section 5.2) as a calibration
+problem, we first checked whether it could instead be explained by
+ordinary generation-time stochasticity. Each API arm was re-run twice on
+the unchanged n=120 calibration split (`rep1`, `rep2`, identical
+prompts/config, re-evaluated under the same band):
+
+| Arm | Run accuracies | Mean | Std |
+|---|---|---|---|
+| `linear_api` | 0.912, 0.905, 0.880 | 0.899 | ±0.017 |
+| `agentic_api` | 0.938, 0.969, 0.966 | 0.957 | ±0.017 |
+
+Run-to-run variance from stochasticity alone is small (~±1.7 points for
+both arms) -- much smaller than the sampling-noise confidence interval at
+n=120 (~±6pt) or even n=300 (~±4pt, Section 5.5). Single runs are not
+being meaningfully misled by generation-time randomness; whatever
+explains the ~10-point holdout regression in Section 5.2 has to be
+something other than ordinary model stochasticity. This measurement
+(referenced again in Section 6) is the closest available estimate of
+single-run noise for both LLM arms, and directly motivates ruling out
+stochasticity before looking for -- and finding -- a selection-procedure
+explanation instead.
 
 ### 5.2 First holdout (n=300) and the regression
 
@@ -352,10 +489,12 @@ not a re-tune.
 `agentic_api` (n=40 both-decided): 0 discordant pairs, p=1.0.
 
 **Result: no detectable effect.** Neither coverage nor accuracy moves by
-more than the previously measured run-to-run variance (±1.7 points,
-Section 5's calibration-split repeat runs), and on every case decided
-under both conditions, self-consistency changed the correctness of
-exactly zero of them. As implemented, self-consistency is a mechanistically
+more than calibration-split single-run stochasticity (§5.1a: ±1.7 points
+for both LLM arms, measured via repeat runs on the n=120 calibration
+set -- the closest available estimate of run-to-run noise, though not
+measured directly on `holdout_v2`), and on every case decided under both
+conditions, self-consistency changed the correctness of exactly zero of
+them. As implemented, self-consistency is a mechanistically
 plausible but empirically inert intervention for this task and model at
 this operating point -- a negative result reported directly rather than
 selectively omitted. It also confirms the accuracy differences reported
@@ -388,27 +527,78 @@ ambiguous-case subset.
 
 ## 8. Discussion
 
-[Author note: synthesize. Key points to make:]
+The calibration-band failure documented in Section 5 is not specific to
+fraud or to this benchmark. Any pipeline that (a) elicits a numeric
+confidence score from an LLM and (b) calibrates a decision threshold
+against a modestly sized labeled set should expect the same failure mode:
+LLM probability outputs are not the smooth, continuous quantities
+classical calibration methods assume -- they cluster on round,
+prompt-anchored values (Section 5.3), and a threshold-selection procedure
+that optimizes a point estimate of accuracy, rather than a variance-aware
+lower bound, can mistake small-sample class imbalance within one of those
+clusters for genuine signal. The fix used here -- select on a
+lower-confidence-bound criterion (Section 5.4) rather than a point
+estimate, and enforce a minimum decided-case count per candidate band --
+is a general prescription for this class of problem, not a fraud-specific
+patch, and Section 5.1a's stochasticity check (±1.7pt run-to-run noise,
+far smaller than the ~10-point holdout regression this failure produced)
+is what let us rule out ordinary generation randomness as the explanation
+before looking for -- and finding -- a selection-procedure bug instead.
 
-- The calibration-band failure mode (Section 5) generalizes beyond this
-  benchmark: any pipeline that (a) elicits numeric confidence scores from
-  an LLM and (b) calibrates a decision threshold on a small labeled set
-  should expect discretized/anchored outputs and should use a variance-
-  aware selection criterion (LCB, not point estimate), not just more
-  candidate thresholds.
-- Selective prediction changes which comparison is meaningful: point
-  accuracy at one operating point is not a fair cross-arm comparison when
-  coverage differs this much; the risk-coverage curve is.
-- Faithfulness and outcome accuracy are separable: an arm can be highly
-  faithful to its evidence (both LLM arms are, ~99%) while still being
-  wrong on genuinely hard cases (Section 4, error taxonomy category 9) --
-  the interesting failures are in judgment under real uncertainty, not
-  evidence fabrication.
-- The practical conclusion for a fraud-ops team evaluating this class of
-  system: classical ML remains the stronger default; an LLM agent's value
-  proposition here is a very high-precision, low-coverage second opinion
-  on the subset of cases it is willing to commit to, not a wholesale
-  replacement.
+This failure mode also has a methodological implication beyond its fix:
+selective prediction changes which cross-arm comparison is meaningful. A
+single point-accuracy number is not a fair comparison between arms that
+escalate at very different rates -- `agentic_api` at 17% coverage and
+`classical_ml` at 85% coverage are not competing on the same axis, and
+Table 1b's per-band comparison and Section 5.5's risk-coverage curves
+(Figure 1) are the correct way to read the results: `classical_ml`
+dominates the full curve (AURC 0.0343 vs. 0.108-0.112), not merely the
+specific operating points each arm happened to select.
+
+Faithfulness and outcome accuracy are also separable results, not the
+same finding read two ways. Both LLM arms are highly faithful to the
+evidence they retrieve (~99% deterministic verified rate, Section 4), and
+the residual genuine errors caught by the LLM-judge pass are concentrated
+in minor evidence-handling categories (miscounting, cross-record
+misattribution) rather than fabrication (`docs/error_taxonomy.md`). The
+most common source of an outright wrong disposition is error-taxonomy
+category 9 -- cases where every cited fact is correct and the reasoning
+is coherent, but the case itself was genuinely hard (e.g. `HOLD2_0104`: a
+well-corroborated multi-signal false positive). That is ordinary task
+difficulty under real uncertainty, not evidence fabrication, and it is
+worth stating plainly: a system can be trustworthy in how it uses
+evidence while still being wrong on the cases that are actually hard, and
+conflating the two would misdiagnose where to invest further effort
+(better retrieval and grounding vs. better judgment on ambiguous cases).
+
+Put together, the practical reading for a fraud-ops team evaluating this
+class of system is that classical ML remains the stronger default: it
+resolves far more of the queue at comparable or better accuracy (Table 1,
+coverage-weighted 77.7% vs. 16.3%) and dominates the full risk-coverage
+tradeoff. The LLM agent's demonstrated value in this evaluation is a
+high-precision, low-coverage second opinion -- its single most accurate
+operating point in this study (96.1%, `agentic_api` at its selected band)
+edges out classical ML's accuracy at the same band, but at less than a
+quarter of the coverage -- not a general-purpose replacement for the
+classical model.
+
+### Ethical considerations
+
+FraudOps-Bench uses only the public, already-anonymized IEEE-CIS Kaggle
+competition dataset [17] -- no real customer PII, case notes, or
+institutional data were used or generated. The fraud-analyst SOP driving
+all LLM arms' reasoning was authored by the researchers for this
+benchmark and has not been validated against a practicing analyst's
+judgment (Section 9); it should not be read as a claim about real
+institutional practice. No fairness or demographic-parity audit was
+performed on any arm's dispositions, and IEEE-CIS provides no
+demographic attributes to audit against directly -- a limitation worth
+flagging explicitly, since a fraud-decisioning system's false-positive
+and false-negative costs are not symmetric across a real customer
+population, even though that asymmetry is outside what this dataset can
+measure. This work reports a research benchmark, not a deployed or
+deployment-ready system, and none of its dispositions were used to make a
+real decision about a real transaction or person.
 
 ## 9. Limitations
 
@@ -440,11 +630,124 @@ Stated directly, not hedged:
 
 ## 10. Conclusion and Future Work
 
-[Author note: close by naming what's explicitly next, not apologizing for
-scope:]
-- Human-analyst baseline and agreement study.
-- A second, structurally different dataset (candidates identified and
-  ranked in `docs/methodology_log.md`: Sparkov, Fraud-ecommerce, BAF).
-- Deeper architecture ablations (supervisor-node necessity, tool-count
-  sensitivity) beyond the single self-consistency ablation run here.
-- Cross-model replication.
+FraudOps-Bench asked whether an LLM agent can emulate a fraud analyst's
+investigation process rather than just its output label, and evaluated
+that question with a selective-prediction framing that lets a system
+decline to decide rather than forcing a guess. The headline empirical
+result is a genuine tradeoff, not a clean win for either approach: under
+a correctly calibrated band, the agentic arm's peak accuracy claim holds
+up on fresh, never-touched data (96.1%, its best result on any split),
+but it earns that accuracy by escalating 83% of the queue, while a
+classical gradient-boosted-tree baseline remains the stronger practical
+performer across the full risk-coverage tradeoff. The more transferable
+result, we think, is not either arm's number but the calibration failure
+mode documented in Section 5: LLM confidence-score discretization
+interacting badly with a threshold selected on a small calibration set is
+a risk any selective-prediction pipeline built on LLM probability outputs
+should design around, independent of the underlying task.
+
+Several deliberate scope cuts bound what this paper claims. No human
+fraud analyst was involved in this evaluation round -- there is no human
+baseline, and the SOP driving the LLM arms' reasoning has not been
+validated by a practicing analyst (Section 9); both are natural next
+steps rather than oversights, and we do not claim this system matches or
+exceeds human analyst judgment. A second, structurally different
+dataset -- BAF [12] is the strongest candidate, since it would extend the
+benchmark to account-opening fraud rather than the card-not-present
+setting studied here, a genuinely different investigation shape -- was
+identified but deliberately deferred rather than integrated under this
+round's scope. Deeper architecture ablations beyond the single
+self-consistency check reported in Section 6 (supervisor-node necessity,
+tool-count sensitivity, in light of SOP-Bench's [8] finding that larger
+tool registries can hurt task success) and cross-model replication beyond
+the single Claude Sonnet 5 backend used throughout are both open. We see
+the calibration-failure diagnosis-and-fix methodology, more than any
+specific accuracy number reported here, as the part of this work most
+worth other selective-prediction practitioners carrying forward.
+
+## Data and Code Availability
+
+The IEEE-CIS Fraud Detection dataset is a public Kaggle competition
+dataset [17] and is not redistributed in this repository, consistent
+with the competition's terms; researchers can obtain it directly from
+Kaggle. The processed, benchmark-specific case files derived from it --
+the dev/calibration/holdout_v1/holdout_v2 splits used for evaluation
+(`data/processed/*.jsonl`) -- are included in the repository, since they
+contain only the small per-case evidence packets used by this
+benchmark's tools, not the raw competition data.
+
+All code (agent implementation, tool definitions, SOP text,
+calibration/evaluation/statistics pipelines, and the frozen-methodology
+manifest described in Section 3.4) is available at
+`github.com/pramegh-uikey/FraudOps-Bench`, which will be made public
+prior to submission.
+
+## References
+
+[1] Association of Certified Fraud Examiners, *Occupational Fraud 2024: A
+Report to the Nations*, ACFE, Austin, TX, USA, 2024.
+
+[2] UK Finance, *Half Year Fraud Report 2025*, UK Finance, London, U.K.,
+2025.
+
+[3] P. Grover, J. Xu, J. Tittelfitz, A. Cheng, Z. Li, J. Zablocki, J. Liu,
+and H. Zhou, "Fraud Dataset Benchmark and Applications," arXiv:2208.14417,
+Aug. 2022.
+
+[4] X. Tan, Y. Ma, and X. Zhang, "Understanding Structured Financial Data
+with LLMs: A Case Study on Fraud Detection," arXiv:2512.13040, Dec. 2025.
+
+[5] S. Shuster, E. Zaloof, A. Shabtai, and R. Puzis, "FAA Framework: A
+Large Language Model-Based Approach for Credit Card Fraud
+Investigations," arXiv:2506.11635, Jun. 2025.
+
+[6] B. Wei, Y. S. Tay, H. Liu, J. Pan, K. Luo, Z. Zhu, and C. Jordan,
+"CORTEX: Collaborative LLM Agents for High-Stakes Alert Triage,"
+arXiv:2510.00311, Sep. 2025.
+
+[7] S. Jajodia, M. Sultana, S. Majumdar, A. Taylor, and G. Vandenberghe,
+"Before You Hand Over the Wheel: Evaluating LLMs for Security Incident
+Analysis," arXiv:2603.06422, Mar. 2026.
+
+[8] S. Nandi et al., "SOP-Bench: Complex Industrial SOPs for Evaluating
+LLM Agents," arXiv:2506.08119, Jun. 2025.
+
+[9] S. Yao, N. Shinn, P. Razavi, and K. Narasimhan, "τ-bench: A Benchmark
+for Tool-Agent-User Interaction in Real-World Domains," arXiv:2406.12045,
+Jun. 2024.
+
+[10] E. Levi and I. Kadar, "IntellAgent: A Multi-Agent Framework for
+Evaluating Conversational AI Systems," arXiv:2501.11067, Jan. 2025.
+
+[11] S. G. Patil, H. Mao, F. Yan, C. C.-J. Ji, V. Suresh, I. Stoica, and
+J. E. Gonzalez, "The Berkeley Function Calling Leaderboard (BFCL): From
+Tool Use to Agentic Evaluation of Large Language Models," in *Proc. 42nd
+Int. Conf. Machine Learning (ICML)*, PMLR vol. 267, 2025, pp. 48371-48392.
+
+[12] S. Jesus, J. Pombal, D. Alves, A. Cruz, P. Saleiro, R. Ribeiro,
+J. Gama, and P. Bizarro, "Turning the Tables: Biased, Imbalanced, Dynamic
+Tabular Datasets for ML Evaluation," in *Proc. NeurIPS 2022 Datasets and
+Benchmarks Track*, arXiv:2211.13358.
+
+[13] E. R. Altman, J. Blanusa, L. von Niederhäusern, B. Egressy,
+A. Anghel, and K. Atasu, "Realistic Synthetic Financial Transactions for
+Anti-Money Laundering Models," in *Proc. NeurIPS 2023 Datasets and
+Benchmarks Track*, arXiv:2306.16424.
+
+[14] Q. Wu, G. Bansal, J. Zhang, Y. Wu, S. Zhang, E. Zhu, B. Li, L. Jiang,
+X. Zhang, and C. Wang, "AutoGen: Enabling Next-Gen LLM Applications via
+Multi-Agent Conversation Framework," arXiv:2308.08155, Aug. 2023.
+
+[15] LangChain Inc., "LangGraph" [Software], GitHub, 2024. [Online].
+Available: https://github.com/langchain-ai/langgraph
+
+[16] crewAI Inc., "CrewAI" [Software], GitHub, 2023. [Online]. Available:
+https://github.com/crewAIInc/crewAI
+
+[17] IEEE Computational Intelligence Society and Vesta Corporation,
+"IEEE-CIS Fraud Detection," Kaggle competition, 2019. [Online].
+Available: https://www.kaggle.com/competitions/ieee-fraud-detection
+
+[18] C. K. Chow, "On Optimum Recognition Error and Reject Tradeoff,"
+*IEEE Trans. Inf. Theory*, vol. 16, no. 1, pp. 41-46, Jan. 1970,
+doi: 10.1109/TIT.1970.1054406.
