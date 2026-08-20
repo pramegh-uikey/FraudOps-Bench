@@ -682,6 +682,20 @@ manifest described in Section 3.4) is available at
 `github.com/pramegh-uikey/FraudOps-Bench`, which will be made public
 prior to submission.
 
+## Acknowledgments
+
+The authors used Claude (Anthropic) to draft portions of the
+Introduction, Related Work, Discussion, and Conclusion and Future Work
+sections, to identify and verify the prior-work citations in the
+References section, and to integrate existing experimental data (the
+Section 5.1a repeat-run variance table and the error-taxonomy findings
+referenced in Section 8) into the manuscript text. All experimental
+design, code, data collection, and statistical analysis were performed
+by the authors; all AI-assisted text and citations were reviewed and
+verified by the authors against the underlying source data
+(`docs/methodology_log.md`, `docs/error_taxonomy.md`, and
+`outputs/holdout_v2/`) before inclusion.
+
 ## References
 
 [1] Association of Certified Fraud Examiners, *Occupational Fraud 2024: A
