@@ -22,6 +22,12 @@ METHODOLOGY_FILES = [
     PROJECT_ROOT / "src" / "flows.py",
     PROJECT_ROOT / "src" / "agentic_graph.py",
     PROJECT_ROOT / "src" / "selective_prediction.py",
+    # Added 2026-08-28 alongside the GPT-5.6 Terra integration: this is
+    # where every backend's actual call/retry/parsing logic lives (including
+    # the new call_openai()), and was previously NOT covered here -- a real
+    # integrity gap, since a silent edit to this file between calibration and
+    # holdout would have gone completely undetected by the guard below.
+    PROJECT_ROOT / "src" / "llm_backends.py",
 ]
 
 
