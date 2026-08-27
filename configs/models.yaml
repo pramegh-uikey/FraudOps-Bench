@@ -72,12 +72,17 @@ backend_defaults:
     num_ctx: 8192
     base_url: http://localhost:11434
   openai:
-    # PROVISIONAL -- initial generous guess, pending Phase C's dedicated
-    # truncation-threshold pilot on the dev split (same methodology used to
-    # derive the Anthropic value above: iterate until truncation is
-    # effectively zero, don't just trust a single anecdotal success).
-    # gpt-5.6-terra rejects 'temperature'/'top_p' outright (400: only the
-    # default is supported) -- intentionally omitted here, same as the
+    # Validated 2026-08-28 on the dev split (n=50 per arm, linear_gpt +
+    # agentic_gpt): 0/50 truncations for both arms at this value (same
+    # methodology used to derive the Anthropic value above -- run a pilot,
+    # check parse_status/finish_reason for truncation, iterate until clean).
+    # Observed headroom was comfortable, not borderline: linear_gpt's
+    # largest case used 4,251 of 16,384 tokens (output + reasoning
+    # combined); agentic_gpt's largest single-node output was 4,721. No
+    # reason to raise it; no reason to lower it either since the cap only
+    # bounds worst-case behavior; billing is on actual tokens used, not the
+    # cap. gpt-5.6-terra rejects 'temperature'/'top_p' outright (400: only
+    # the default is supported) -- intentionally omitted here, same as the
     # comment above for Anthropic. This key is still named max_tokens (not
     # max_completion_tokens) because run_baseline.py's CALL_KWARG_KEYS only
     # forwards a key literally named max_tokens; llm_backends.py's

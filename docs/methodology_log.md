@@ -580,3 +580,68 @@ between the two endpoints. Legitimate to compute (it's a read-off of the
 already-swept descriptive curve, not a new band selection), but explicitly
 kept out of the paper draft per instruction -- the frozen (0.25, 0.75)
 result remains the single primary number for `agentic_api`.
+
+### 2026-08-28 -- GPT-5.6 Terra integration: backend added, dev-split truncation pilot clean
+
+Added a second model, GPT-5.6 Terra (OpenAI), as two new arms --
+`linear_gpt` / `agentic_gpt` -- run through the identical pipeline, SOP,
+and calibration methodology already used for `linear_api`/`agentic_api`.
+Explicit goal: check whether the calibration-discretization finding and
+the classical-ML-dominates-in-practice finding are Claude-specific or
+general, without giving GPT any comparison advantage (own calibration,
+own band, same SOP/tools/splits/stats pipeline).
+
+**API verification before writing any code, all against real calls, not
+docs/assumptions:** confirmed the live model ID (`gpt-5.6-terra`, exact
+match to the marketing name), that `temperature`/`top_p` are both
+REJECTED (400) same as Claude, that the request param is
+`max_completion_tokens` not `max_tokens`, and pricing ($2/M input, $12/M
+output, plus a real cached-input discount -- $0.20/M reads, $2.50/M
+writes). One deliberately-triggered finding: a reasoning-tier model can
+spend its entire token budget on invisible reasoning and return empty
+visible content with `finish_reason="length"` and no error -- confirmed
+live with a 20-token cap (content="", reasoning_tokens=20/20). Guarded
+against explicitly in `call_openai()`, not left to surface as a generic
+empty-response bug.
+
+**Real, load-bearing discovery mid-implementation:** `bind_tools()` on
+`gpt-5.6-terra` 400s over the default Chat Completions endpoint with
+reasoning active ("Function tools with reasoning_effort are not
+supported... use /v1/responses or set reasoning_effort to 'none'").
+Setting `reasoning_effort='none'` would mean `agentic_gpt` runs without
+reasoning while `linear_gpt` (plain Chat Completions, no tools) reasons
+normally -- an apples-to-apples violation within GPT's own two arms.
+Fixed by switching the agentic flow to the Responses API
+(`use_responses_api=True`), confirmed working for tool binding,
+structured output, and a full multi-turn tool-call round trip.
+
+**Closed an integrity gap while here:** `freeze_methodology.py`'s
+`METHODOLOGY_FILES` never included `llm_backends.py` -- the file where
+every backend's actual call/retry/parsing logic lives, including the new
+`call_openai()`. A silent edit there between calibration and holdout
+would previously have gone undetected. Now hashed alongside the other 5
+files.
+
+**Dev-split truncation pilot (n=50 per arm, same methodology used to
+derive Claude's `max_tokens: 8192`):** both arms clean at
+`max_tokens: 16384` -- 0/50 truncations for either. Headroom was
+comfortable, not borderline: `linear_gpt`'s largest case used 4,251 of
+16,384 tokens (output + reasoning combined); `agentic_gpt`'s largest
+single-node output was 4,721. No adjustment needed.
+
+**Incidental finding from the pilot, not yet a conclusion (n=50, not the
+real calibration/holdout sample):** `agentic_gpt` averaged $0.1576/case
+vs. `agentic_api`'s $0.132/case (~19% more expensive on this sample),
+despite a real 47% cache-hit rate on input tokens (`cached_input_tokens`
+averaged 23,156 of 49,742 average input tokens). `agentic_gpt`'s average
+input-token count (49,742) also ran notably higher than `agentic_api`'s
+(28,731 on the real holdout_v2 run) -- plausibly the Responses API's
+encrypted reasoning-trace blocks getting resent as part of conversation
+history across the graph's multiple sequential LLM calls per case, though
+this hasn't been confirmed by inspecting the raw message payloads. Worth
+running down before reporting cost numbers, not assumed.
+
+Next: calibration run (n=120) for both arms, `calibrate_arm.py` (new
+reusable driver -- `calibrate_band()`/`save_frozen_band()` previously had
+no CLI anywhere in `src/`, only `notebooks/exp1.ipynb`), refreeze, then
+`holdout_v2`.
