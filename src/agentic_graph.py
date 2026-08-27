@@ -8,6 +8,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -15,7 +16,7 @@ from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
 from flow_types import FlowResult
-from llm_backends import ANTHROPIC_COST_PER_MTOK
+from llm_backends import ANTHROPIC_COST_PER_MTOK, OPENAI_COST_PER_MTOK
 from parsing import strip_hidden_field
 from selective_prediction import DEFAULT_BAND, probability_to_disposition, resolve_with_second_opinion
 from tools import (
@@ -159,6 +160,35 @@ def _get_chat_model(backend: str, model: str, **call_kwargs):
             num_ctx=call_kwargs.get("num_ctx", 8192),
             base_url=call_kwargs.get("base_url", "http://localhost:11434"),
         )
+    if backend == "openai":
+        max_tokens = call_kwargs.get("max_tokens", 4096)
+        # Verified live against gpt-5.6-terra, 2026-08-28: bind_tools() over
+        # the default Chat Completions endpoint 400s on this model --
+        # "Function tools with reasoning_effort are not supported for
+        # gpt-5.6-terra in /v1/chat/completions. To use function tools, use
+        # /v1/responses or set reasoning_effort to 'none'." Setting
+        # reasoning_effort='none' would mean this arm runs without reasoning
+        # while linear_gpt (plain Chat Completions, no tools) reasons
+        # normally -- an apples-to-apples violation within GPT's own two
+        # arms. use_responses_api=True is the correct fix, confirmed working
+        # for bind_tools(), with_structured_output(), and a full multi-turn
+        # tool-call round trip (tool_calls -> ToolMessage -> follow-up
+        # invoke). Used for brain/supervisor/finalize uniformly (not just the
+        # tool-binding brain LLM) so truncation-signal shape stays consistent
+        # across all three nodes within one case.
+        # NOTE: 'max_tokens' as a direct ChatOpenAI constructor kwarg is
+        # translated internally by langchain-openai to the real API param
+        # (max_completion_tokens) -- confirmed live, no manual translation
+        # needed here, same call shape as the Anthropic branch above.
+        # NOTE: temperature/top_p intentionally never set -- both are
+        # REJECTED (400) by gpt-5.6-terra, confirmed live, same constraint as
+        # Anthropic and as llm_backends.py's call_openai().
+        return ChatOpenAI(
+            model=model,
+            max_tokens=max_tokens,
+            api_key=os.getenv("OPENAI_API_KEY"),
+            use_responses_api=True,
+        )
     raise ValueError(f"Unknown backend '{backend}'")
 
 
@@ -216,18 +246,48 @@ def _make_case_tools(transaction_id):
     ]
 
 
-def _usage_cost(usage_metadata: dict | None, backend: str, model: str) -> tuple[int | None, int | None, float | None]:
+def _usage_cost(
+    usage_metadata: dict | None, backend: str, model: str
+) -> tuple[int | None, int | None, float | None, int | None, int | None]:
     if not usage_metadata:
-        return None, None, None
+        return None, None, None, None, None
     input_tokens = usage_metadata.get("input_tokens")
     output_tokens = usage_metadata.get("output_tokens")
+    reasoning_tokens = None
+    cached_input_tokens = None
     cost_usd = None
     if backend == "anthropic" and model in ANTHROPIC_COST_PER_MTOK and input_tokens is not None:
         in_rate, out_rate = ANTHROPIC_COST_PER_MTOK[model]
         cost_usd = (input_tokens * in_rate + (output_tokens or 0) * out_rate) / 1_000_000
     elif backend == "ollama":
         cost_usd = 0.0
-    return input_tokens, output_tokens, cost_usd
+    elif backend == "openai" and model in OPENAI_COST_PER_MTOK and input_tokens is not None:
+        # LangChain's usage_metadata shape for OpenAI (confirmed live,
+        # 2026-08-28, both Chat Completions and Responses API): reasoning
+        # count under output_token_details.reasoning, cache-read count under
+        # input_token_details.cache_read -- these key names are LangChain's
+        # own normalization and differ from the raw SDK's
+        # completion_tokens_details.reasoning_tokens /
+        # prompt_tokens_details.cached_tokens used in llm_backends.py's
+        # call_openai(), which reads the raw SDK response directly, not
+        # through LangChain.
+        output_details = usage_metadata.get("output_token_details") or {}
+        input_details = usage_metadata.get("input_token_details") or {}
+        reasoning_tokens = output_details.get("reasoning")
+        cached_input_tokens = input_details.get("cache_read")
+        cache_write_tokens = input_details.get("cache_creation") or 0
+        in_rate, cached_rate, cache_write_rate, out_rate = OPENAI_COST_PER_MTOK[model]
+        cached = cached_input_tokens or 0
+        # input_tokens is inclusive of cache_read (OpenAI convention,
+        # confirmed live) -- don't double-count.
+        uncached_input = max(input_tokens - cached, 0)
+        cost_usd = (
+            uncached_input * in_rate
+            + cached * cached_rate
+            + cache_write_tokens * cache_write_rate
+            + (output_tokens or 0) * out_rate
+        ) / 1_000_000
+    return input_tokens, output_tokens, cost_usd, reasoning_tokens, cached_input_tokens
 
 
 def build_graph(
@@ -274,8 +334,16 @@ def build_graph(
 
     def _log_usage(raw_message) -> None:
         usage = getattr(raw_message, "usage_metadata", None)
-        input_tokens, output_tokens, cost_usd = _usage_cost(usage, backend, model)
-        usage_log.append({"input_tokens": input_tokens, "output_tokens": output_tokens, "cost_usd": cost_usd})
+        input_tokens, output_tokens, cost_usd, reasoning_tokens, cached_input_tokens = _usage_cost(
+            usage, backend, model
+        )
+        usage_log.append({
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost_usd": cost_usd,
+            "reasoning_tokens": reasoning_tokens,
+            "cached_input_tokens": cached_input_tokens,
+        })
 
     def brain_node(state: AgentState) -> dict:
         system = SystemMessage(content=BRAIN_SYSTEM_PROMPT.format(sop_text=sop_text, case_json=case_json))
@@ -410,6 +478,12 @@ def run_case(case: dict, sop_text: str, backend: str, model: str, max_steps: int
     total_input_tokens = sum(u["input_tokens"] for u in usage_log if u["input_tokens"] is not None) or None
     total_output_tokens = sum(u["output_tokens"] for u in usage_log if u["output_tokens"] is not None) or None
     total_cost = sum(u["cost_usd"] for u in usage_log if u["cost_usd"] is not None) if usage_log else None
+    total_reasoning_tokens = sum(
+        u["reasoning_tokens"] for u in usage_log if u.get("reasoning_tokens") is not None
+    ) or None
+    total_cached_input_tokens = sum(
+        u["cached_input_tokens"] for u in usage_log if u.get("cached_input_tokens") is not None
+    ) or None
 
     disposition = final_state.get("final_disposition")
     tool_call_count = sum(1 for m in final_state["memory"])
@@ -424,6 +498,8 @@ def run_case(case: dict, sop_text: str, backend: str, model: str, max_steps: int
             input_tokens=total_input_tokens,
             output_tokens=total_output_tokens,
             cost_usd=total_cost,
+            reasoning_tokens=total_reasoning_tokens,
+            cached_input_tokens=total_cached_input_tokens,
         )
 
     return FlowResult(
@@ -435,4 +511,6 @@ def run_case(case: dict, sop_text: str, backend: str, model: str, max_steps: int
         input_tokens=total_input_tokens,
         output_tokens=total_output_tokens,
         cost_usd=total_cost,
+        reasoning_tokens=total_reasoning_tokens,
+        cached_input_tokens=total_cached_input_tokens,
     )
