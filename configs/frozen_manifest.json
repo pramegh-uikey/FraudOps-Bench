@@ -1,13 +1,14 @@
 {
-  "frozen_at": "2026-08-18T09:42:07.336838+00:00",
-  "git_commit": "000340e31c39a4b18db81e0f94dfee0050bccc37",
+  "frozen_at": "2026-08-27T22:04:33.719784+00:00",
+  "git_commit": "ba5da2cfd2d73329e2c0573e30dea504aced9ad9",
   "git_dirty": true,
-  "label": "v2-fixed-calibrate-band-holdout-v2",
+  "label": "add gpt-5.6-terra arms (linear_gpt, agentic_gpt): openai backend + calibrated bands",
   "file_hashes": {
     "prompts/sop_v0.md": "0ffec8b7d2071429bf64eb44340350687293d66eb55df99f0f0674505105a2cf",
-    "configs/models.yaml": "8ffc93fddbd7fda34298fcfa66742f5c43f39d6ff77df45ed4454b3ad6818d3e",
-    "src/flows.py": "4220f9e6246476a5bee5af9254f2b22e190dd73b2d941cdb5d46f05deba40c6c",
-    "src/agentic_graph.py": "10c4d57b15451a0e28507fc3d99f08651783b67feb521962704cb525ad91a77a",
-    "src/selective_prediction.py": "0f3177b889b9264a77c1a408d82b419e7d2ff794b3f16fbb33cc4c6e791c6676"
+    "configs/models.yaml": "9f7ba8f60b432f7725150bb5be2f484cd802224d48ecaba2133ff02069080d6d",
+    "src/flows.py": "8706fa35f938be824aee7bb1a2ed607056503cb5a100f0fe468d10bdd2d90b2f",
+    "src/agentic_graph.py": "ed129f355eeba69a837e0c03d50d9b494143552cd181158c4e52cea3d7c4efbd",
+    "src/selective_prediction.py": "0f3177b889b9264a77c1a408d82b419e7d2ff794b3f16fbb33cc4c6e791c6676",
+    "src/llm_backends.py": "6ba30e9a075021e9cbd5a4813569657acba0dfef0d7547ff4db6b857b43bb669"
   }
 }
