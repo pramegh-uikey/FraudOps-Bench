@@ -2,6 +2,8 @@ pandas
 numpy
 google-genai
 anthropic
+openai
+langchain-openai
 pyyaml
 requests
 python-dotenv
