@@ -32,6 +32,16 @@ arms:
     backend: ollama
     model: qwen2.5:14b-instruct
 
+  linear_gpt:
+    flow: linear
+    backend: openai
+    model: gpt-5.6-terra
+
+  agentic_gpt:
+    flow: agentic
+    backend: openai
+    model: gpt-5.6-terra
+
   classical_ml:
     flow: classical_ml
     model: hgb # or logreg
@@ -61,6 +71,19 @@ backend_defaults:
     temperature: 0.0
     num_ctx: 8192
     base_url: http://localhost:11434
+  openai:
+    # PROVISIONAL -- initial generous guess, pending Phase C's dedicated
+    # truncation-threshold pilot on the dev split (same methodology used to
+    # derive the Anthropic value above: iterate until truncation is
+    # effectively zero, don't just trust a single anecdotal success).
+    # gpt-5.6-terra rejects 'temperature'/'top_p' outright (400: only the
+    # default is supported) -- intentionally omitted here, same as the
+    # comment above for Anthropic. This key is still named max_tokens (not
+    # max_completion_tokens) because run_baseline.py's CALL_KWARG_KEYS only
+    # forwards a key literally named max_tokens; llm_backends.py's
+    # call_openai() and agentic_graph.py's _get_chat_model() both translate
+    # it internally to whatever the real API/SDK needs.
+    max_tokens: 16384
 
 retry:
   max_retries: 5
