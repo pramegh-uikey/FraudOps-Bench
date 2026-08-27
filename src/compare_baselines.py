@@ -18,6 +18,9 @@ KEY_COMPARISONS = [
     ("linear_local", "agentic_local"),
     ("linear_api", "linear_local"),
     ("agentic_api", "agentic_local"),
+    ("linear_api", "linear_gpt"),
+    ("agentic_api", "agentic_gpt"),
+    ("linear_gpt", "agentic_gpt"),
 ]
 
 WORKFLOW_COLS = [

@@ -19,6 +19,12 @@ ARM_BANDS = {
     "linear_api": (0.35, 0.65),
     "agentic_api": (0.25, 0.75),
     "classical_ml": (0.35, 0.65),
+    # TODO(gpt-5.6-terra calibration): "linear_gpt" and "agentic_gpt" entries
+    # go here once src/calibrate_arm.py has run for both arms -- copy the
+    # real bands from configs/calibrated_bands.json. Required, not optional:
+    # the risk-coverage loop below does ARM_BANDS[arm] with no .get()
+    # fallback (unlike load_probs() above), so running this script with
+    # these arms added to `arms` below but missing here will KeyError.
 }
 
 
@@ -116,7 +122,7 @@ def main():
     parser.add_argument("--split", default="holdout_v2")
     args = parser.parse_args()
 
-    arms = ["linear_api", "agentic_api", "classical_ml"]
+    arms = ["linear_api", "agentic_api", "classical_ml", "linear_gpt", "agentic_gpt"]
     data = {arm: load_probs(args.split, arm) for arm in arms}
 
     report_lines = [f"# Statistical analysis -- {args.split}\n"]
@@ -141,7 +147,10 @@ def main():
     report_lines.append("## Pairwise McNemar's tests (paired, cases both arms decided)\n")
     report_lines.append("| Comparison | n (both decided) | b | c | p-value |")
     report_lines.append("|---|---|---|---|---|")
-    pairs = [("linear_api", "agentic_api"), ("linear_api", "classical_ml"), ("agentic_api", "classical_ml")]
+    pairs = [
+        ("linear_api", "agentic_api"), ("linear_api", "classical_ml"), ("agentic_api", "classical_ml"),
+        ("linear_api", "linear_gpt"), ("agentic_api", "agentic_gpt"), ("linear_gpt", "agentic_gpt"),
+    ]
     for arm_a, arm_b in pairs:
         merged = data[arm_a][["case_id", "ground_truth_is_fraud", "predicted_is_fraud"]].merge(
             data[arm_b][["case_id", "predicted_is_fraud"]], on="case_id", suffixes=(f"_{arm_a}", f"_{arm_b}")
