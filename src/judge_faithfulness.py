@@ -92,7 +92,8 @@ def judge_case(model_output: dict, ground_truth_evidence: dict) -> dict:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--arm", required=True, choices=["linear_api", "agentic_api"])
+    parser.add_argument("--arm", required=True,
+                         choices=["linear_api", "agentic_api", "linear_gpt", "agentic_gpt"])
     parser.add_argument("--split", required=True,
                          choices=["dev", "calibration", "holdout", "holdout_v2"])
     parser.add_argument("--sample-size", type=int, default=25)
@@ -102,7 +103,7 @@ def main():
     parsed_rows = load_jsonl(arm_output_path(args.split, args.arm, suffix="_parsed.jsonl"))
     parsed_rows = [r for r in parsed_rows if r.get("parse_status") == "success"]
 
-    if args.arm == "linear_api":
+    if args.arm in ("linear_api", "linear_gpt"):
         evidence_by_case = load_linear_evidence_by_case(args.split)
     else:
         agentic_data = load_agentic_evidence_by_case(args.split, args.arm)

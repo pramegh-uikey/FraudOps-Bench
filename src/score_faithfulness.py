@@ -11,7 +11,7 @@ from faithfulness import (
 )
 from splits import arm_output_path
 
-SUPPORTED_ARMS = ["linear_api", "agentic_api"]
+SUPPORTED_ARMS = ["linear_api", "agentic_api", "linear_gpt", "agentic_gpt"]
 
 
 def main():
@@ -23,7 +23,7 @@ def main():
     parsed_path = arm_output_path(args.split, args.arm, suffix="_parsed.jsonl")
     parsed_rows = load_jsonl(parsed_path)
 
-    if args.arm == "linear_api":
+    if args.arm in ("linear_api", "linear_gpt"):
         evidence_by_case = load_linear_evidence_by_case(args.split)
         tools_called_by_case = {}
     else:
@@ -71,7 +71,7 @@ def main():
     print(f"\nDotted-style citations found: {int(df['n_dotted_citations'].sum())}, "
           f"exact-match correct: {int(df['n_dotted_correct'].sum())}")
     print(f"Uninformative citations (tool named, no number): {int(df['n_uninformative_citations'].sum())}")
-    if args.arm == "agentic_api":
+    if args.arm in ("agentic_api", "agentic_gpt"):
         print(f"Citations referencing a tool never actually called: {int(df['n_uncalled_tool_citations'].sum())}")
 
     print(f"\nSaved case-level faithfulness scores to {output_path}")
