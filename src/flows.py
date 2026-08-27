@@ -66,6 +66,8 @@ def _run_completion_flow(prompt: str, backend: str, model: str, **call_kwargs) -
             input_tokens=r.input_tokens,
             output_tokens=r.output_tokens,
             cost_usd=r.cost_usd,
+            reasoning_tokens=r.reasoning_tokens,
+            cached_input_tokens=r.cached_input_tokens,
         )
 
     result = FlowResult(
@@ -75,6 +77,8 @@ def _run_completion_flow(prompt: str, backend: str, model: str, **call_kwargs) -
         input_tokens=r.input_tokens,
         output_tokens=r.output_tokens,
         cost_usd=r.cost_usd,
+        reasoning_tokens=r.reasoning_tokens,
+        cached_input_tokens=r.cached_input_tokens,
     )
 
     p1 = _extract_probability(r.raw_text)
@@ -95,6 +99,10 @@ def _run_completion_flow(prompt: str, backend: str, model: str, **call_kwargs) -
             result.output_tokens = (result.output_tokens or 0) + r2.output_tokens
         if r2.cost_usd is not None:
             result.cost_usd = (result.cost_usd or 0.0) + r2.cost_usd
+        if r2.reasoning_tokens is not None:
+            result.reasoning_tokens = (result.reasoning_tokens or 0) + r2.reasoning_tokens
+        if r2.cached_input_tokens is not None:
+            result.cached_input_tokens = (result.cached_input_tokens or 0) + r2.cached_input_tokens
         p2 = _extract_probability(r2.raw_text)
         return p2 if p2 is not None else p1
 

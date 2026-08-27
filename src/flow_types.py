@@ -11,3 +11,7 @@ class FlowResult:
     input_tokens: int | None = None
     output_tokens: int | None = None
     cost_usd: float | None = None
+    # OpenAI-specific (None for Anthropic/Ollama) -- see LLMCallResult in
+    # llm_backends.py for what these track and why.
+    reasoning_tokens: int | None = None
+    cached_input_tokens: int | None = None
