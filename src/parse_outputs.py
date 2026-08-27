@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PASSTHROUGH_FIELDS = [
     "arm", "flow", "backend", "model",
     "latency_ms", "input_tokens", "output_tokens", "cost_usd", "tool_call_count",
+    "reasoning_tokens", "cached_input_tokens",
 ]
 
 

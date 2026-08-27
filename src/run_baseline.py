@@ -174,6 +174,8 @@ def main():
                 "input_tokens": result.input_tokens,
                 "output_tokens": result.output_tokens,
                 "cost_usd": result.cost_usd,
+                "reasoning_tokens": result.reasoning_tokens,
+                "cached_input_tokens": result.cached_input_tokens,
             }
 
             out.write(json.dumps(row) + "\n")
