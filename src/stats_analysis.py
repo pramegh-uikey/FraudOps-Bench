@@ -19,12 +19,18 @@ ARM_BANDS = {
     "linear_api": (0.35, 0.65),
     "agentic_api": (0.25, 0.75),
     "classical_ml": (0.35, 0.65),
-    # TODO(gpt-5.6-terra calibration): "linear_gpt" and "agentic_gpt" entries
-    # go here once src/calibrate_arm.py has run for both arms -- copy the
-    # real bands from configs/calibrated_bands.json. Required, not optional:
-    # the risk-coverage loop below does ARM_BANDS[arm] with no .get()
-    # fallback (unlike load_probs() above), so running this script with
-    # these arms added to `arms` below but missing here will KeyError.
+    # Calibrated 2026-08-27 via src/calibrate_arm.py (n=120 calibration
+    # split, same LCB methodology as the arms above).
+    "linear_gpt": (0.2, 0.8),
+    # agentic_gpt hit calibrate_band()'s fallback path: no candidate band
+    # cleared both the 85% accuracy target and the >=30-decided-case support
+    # floor (closest was half_width=0.30 at LCB 0.8494 with 34 decided; the
+    # next step up hit LCB 1.0 but only 21 decided, correctly rejected as
+    # "suspiciously perfect from too few cases" rather than accepted). Fell
+    # through to the widest candidate, which itself only has 12 decided
+    # cases in calibration -- a genuinely wide, low-confidence band, not
+    # tuned to look this way. See docs/methodology_log.md, 2026-08-27 entry.
+    "agentic_gpt": (0.1, 0.9),
 }
 
 

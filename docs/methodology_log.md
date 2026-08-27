@@ -645,3 +645,49 @@ Next: calibration run (n=120) for both arms, `calibrate_arm.py` (new
 reusable driver -- `calibrate_band()`/`save_frozen_band()` previously had
 no CLI anywhere in `src/`, only `notebooks/exp1.ipynb`), refreeze, then
 `holdout_v2`.
+
+### 2026-08-27 -- GPT-5.6 Terra calibration split run (n=120) and band selection
+
+Ran `linear_gpt`/`agentic_gpt` on the n=120 calibration split (own
+from-scratch calibration, per the apples-to-apples requirement --
+deliberately never reused `linear_api`/`agentic_api`'s frozen bands). Both
+runs got killed partway by what was almost certainly clamshell sleep
+(`caffeinate -dimsu` was active but can't override a closed lid without an
+external display) -- `linear_gpt` at 94/120, `agentic_gpt` at 35/120, zero
+corrupted/error rows in either partial file. Resumed both via
+`run_baseline.py`'s existing dedup/resume logic (reloads existing output,
+skips already-completed case_ids) with no data loss. Both finished clean:
+120/120, 0 errors, 0 parse failures.
+
+**Band selection (`calibrate_arm.py`, same LCB methodology as
+`linear_api`/`agentic_api`):**
+
+| Arm | Band | LCB acc. | Mean acc. | Total decided (of 120) |
+|---|---|---|---|---|
+| `linear_gpt` | (0.2, 0.8) | 0.884 | 0.931 | 39 |
+| `agentic_gpt` | (0.1, 0.9) -- fallback | 1.0 | 1.0 | 12 |
+
+`linear_gpt` selected organically -- the half_width=0.30 candidate cleared
+both the 85% LCB-accuracy target and the >=30-decided-case floor.
+
+`agentic_gpt` hit `calibrate_band()`'s fallback path -- worth stating
+plainly, not smoothing over. No candidate band cleared both bars: the
+closest, half_width=0.30, landed at LCB 0.8494 (just under the 0.85
+target) with 34 decided cases; the next step up, half_width=0.35, hit a
+perfect LCB 1.0 but only 21 decided cases, and was correctly rejected by
+the >=30-decided-case guard as "a suspiciously perfect score from too few
+cases is not evidence" (exactly the docstring's own stated rationale for
+that guard existing). Fell through to the widest fallback band, (0.1,
+0.9), which itself only has 12 decided cases in calibration -- LCB=1.0
+there is trivial on so few points and should not be over-trusted either.
+This is a genuine, unforced result of applying the identical corrected
+methodology to a new model, not a bug or a parameter chosen to produce a
+particular outcome; the guard did exactly what it's supposed to do
+(refuse false confidence, degrade to maximally conservative rather than
+silently accept a narrow band on thin support). Flagging as a real
+possibility worth watching on `holdout_v2`: this band implies `agentic_gpt`
+may escalate a very large fraction of the holdout queue.
+
+Next: refreeze (`models.yaml`, `agentic_graph.py`, `flows.py`,
+`llm_backends.py`, `selective_prediction.py` all changed since the last
+freeze), then the single-use `holdout_v2` run for both arms.
