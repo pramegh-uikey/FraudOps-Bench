@@ -1,5 +1,7 @@
 import argparse
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from pathlib import Path
 
@@ -70,6 +72,16 @@ def main():
     parser.add_argument("--override-self-consistency", choices=["true", "false"], default=None,
                          help="force self_consistency on/off regardless of configs/models.yaml, "
                               "for ablation runs (e.g. --run-tag no_sc)")
+    parser.add_argument("--concurrency", type=int, default=1,
+                         help="number of cases to run concurrently via a thread pool (I/O-bound API "
+                              "calls, not CPU-bound, so threads are sufficient). Default 1 preserves "
+                              "the original sequential behavior byte-for-byte. Each case's row is still "
+                              "written and flushed to the output file the moment it completes (under a "
+                              "lock), so the same crash-safe resumability holds at any concurrency "
+                              "level -- a killed process still leaves every finished case safely on "
+                              "disk. Not part of the frozen methodology (run_baseline.py isn't in "
+                              "freeze_methodology.py's METHODOLOGY_FILES) since it only changes how "
+                              "fast cases are run, not what's being asked of the model.")
     args = parser.parse_args()
 
     is_holdout_split = args.split in ("holdout", "holdout_v2")
@@ -146,40 +158,46 @@ def main():
     print(f"Arm '{args.arm}': {len(target_case_ids)} targeted, "
           f"{len(completed_ids & target_case_ids)} already complete, {len(to_run)} to run.")
 
+    runner = FLOW_RUNNERS[flow]
+
+    def _run_one(item):
+        result = runner(item, sop_text, backend, model, **call_kwargs)
+        return {
+            "case_id": item["case_id"],
+            "transaction_id": item["transaction_id"],
+            "ground_truth_is_fraud": item["ground_truth_is_fraud"],
+            "arm": args.arm,
+            "flow": flow,
+            "backend": backend,
+            "model": model,
+            "raw_response": result.raw_response,
+            "error": result.error,
+            "tool_trace": result.tool_trace,
+            "tool_call_count": result.tool_call_count,
+            "latency_ms": result.latency_ms,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+            "cost_usd": result.cost_usd,
+            "reasoning_tokens": result.reasoning_tokens,
+            "cached_input_tokens": result.cached_input_tokens,
+        }
+
+    write_lock = threading.Lock()
+
     with open(output_path, "a") as out:
-        for item in tqdm(to_run, desc=args.arm):
-            case_id = item["case_id"]
-            transaction_id = item["transaction_id"]
-            ground_truth = item["ground_truth_is_fraud"]
+        def _write(row):
+            with write_lock:
+                out.write(json.dumps(row) + "\n")
+                out.flush()
 
-            runner = FLOW_RUNNERS[flow]
-            if flow == "linear":
-                result = runner(item, sop_text, backend, model, **call_kwargs)
-            else:
-                result = runner(item, sop_text, backend, model, **call_kwargs)
-
-            row = {
-                "case_id": case_id,
-                "transaction_id": transaction_id,
-                "ground_truth_is_fraud": ground_truth,
-                "arm": args.arm,
-                "flow": flow,
-                "backend": backend,
-                "model": model,
-                "raw_response": result.raw_response,
-                "error": result.error,
-                "tool_trace": result.tool_trace,
-                "tool_call_count": result.tool_call_count,
-                "latency_ms": result.latency_ms,
-                "input_tokens": result.input_tokens,
-                "output_tokens": result.output_tokens,
-                "cost_usd": result.cost_usd,
-                "reasoning_tokens": result.reasoning_tokens,
-                "cached_input_tokens": result.cached_input_tokens,
-            }
-
-            out.write(json.dumps(row) + "\n")
-            out.flush()
+        if args.concurrency <= 1:
+            for item in tqdm(to_run, desc=args.arm):
+                _write(_run_one(item))
+        else:
+            with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
+                futures = {pool.submit(_run_one, item): item for item in to_run}
+                for future in tqdm(as_completed(futures), total=len(to_run), desc=args.arm):
+                    _write(future.result())
 
     print(f"Done. Output at {output_path}")
 
