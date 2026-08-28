@@ -101,7 +101,7 @@ SOP:
 
 CASE:
 {case_json}
-"""
+{exemplar_section}"""
 
 SUPERVISOR_PROMPT = """You are the supervisor overseeing a fraud investigation in progress. \
 You do not gather evidence yourself -- you review the analyst's progress \
@@ -130,7 +130,7 @@ SOP:
 
 CASE:
 {case_json}
-
+{exemplar_section}
 EVIDENCE GATHERED (structured investigation memory):
 {memory_json}
 
@@ -309,6 +309,17 @@ def build_graph(
     case_json = json.dumps(case_for_agent, indent=2)
     required_checks = json.dumps(case.get("required_checks", []))
 
+    # use_retrieval (configs/models.yaml, agentic_retrieval arm): same
+    # nearest-neighbor exemplar grounding as linear_retrieval (see
+    # src/retrieval.py, src/flows.py's run_linear) -- computed once per
+    # case here (not shown to the agent as a tool result, since it's not
+    # something the agent "calls" -- static context like the case itself),
+    # then baked into both BRAIN_SYSTEM_PROMPT and FINALIZE_PROMPT below.
+    exemplar_section = ""
+    if call_kwargs.get("use_retrieval", False):
+        import retrieval
+        exemplar_section = "\n" + retrieval.get_exemplar_text_for_case(case) + "\n"
+
     max_retries = call_kwargs.get("max_retries", DEFAULT_MAX_RETRIES)
     # See flows.py's _run_completion_flow for why this defaults True but
     # should be disabled for zero-evidence arms.
@@ -346,7 +357,9 @@ def build_graph(
         })
 
     def brain_node(state: AgentState) -> dict:
-        system = SystemMessage(content=BRAIN_SYSTEM_PROMPT.format(sop_text=sop_text, case_json=case_json))
+        system = SystemMessage(content=BRAIN_SYSTEM_PROMPT.format(
+            sop_text=sop_text, case_json=case_json, exemplar_section=exemplar_section
+        ))
         # Anthropic rejects a request with only a system message (needs a
         # leading user turn); on the very first call state["messages"] is
         # empty, so seed a kickoff turn. Ollama is lenient here, but this
@@ -390,6 +403,7 @@ def build_graph(
         prompt = FINALIZE_PROMPT.format(
             sop_text=sop_text,
             case_json=case_json,
+            exemplar_section=exemplar_section,
             memory_json=json.dumps(state["memory"], indent=2),
         )
         result = finalize_llm.invoke(prompt)

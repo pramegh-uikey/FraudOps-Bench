@@ -75,7 +75,7 @@ def build_evidence_packet(case):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--split", choices=["dev", "calibration", "holdout", "holdout_v2"], default="dev")
+    parser.add_argument("--split", choices=["dev", "calibration", "holdout", "holdout_v2", "retrieval_pool"], default="dev")
     args = parser.parse_args()
 
     cases = load_jsonl(cases_path(args.split))

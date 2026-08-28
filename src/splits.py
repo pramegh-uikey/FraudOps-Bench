@@ -2,7 +2,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-SPLITS = ("dev", "calibration", "holdout", "holdout_v2")
+SPLITS = ("dev", "calibration", "holdout", "holdout_v2", "retrieval_pool")
 
 _CASES_PATH = {
     "dev": PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v0_cases.jsonl",
@@ -15,6 +15,12 @@ _CASES_PATH = {
     # single-use holdout anymore. holdout_v2 is a fresh, disjoint sample for
     # a genuinely unpeeked re-check under the corrected methodology.
     "holdout_v2": PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v2_holdout_cases.jsonl",
+    # retrieval_pool: a dedicated, disjoint pool of labeled cases used only
+    # as the k-NN exemplar source for linear_retrieval/agentic_retrieval.
+    # Never scored itself, never reused as another split's cases -- kept
+    # out of load_excluded_transaction_ids()'s union like every other
+    # split, so it can never leak into a future split either.
+    "retrieval_pool": PROJECT_ROOT / "data" / "processed" / "fraudops_bench_retrieval_pool_cases.jsonl",
 }
 
 

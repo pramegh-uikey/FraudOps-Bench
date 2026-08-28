@@ -28,6 +28,12 @@ METHODOLOGY_FILES = [
     # integrity gap, since a silent edit to this file between calibration and
     # holdout would have gone completely undetected by the guard below.
     PROJECT_ROOT / "src" / "llm_backends.py",
+    # Added for linear_retrieval/agentic_retrieval: the k-NN feature set and
+    # k=5 must be frozen before calibration, same discipline as everything
+    # else here -- tuning either against calibration accuracy later would
+    # reproduce the exact small-sample overfitting mistake Section 5.3
+    # documents, one level up.
+    PROJECT_ROOT / "src" / "retrieval.py",
 ]
 
 

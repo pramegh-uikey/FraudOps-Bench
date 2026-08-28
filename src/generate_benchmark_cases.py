@@ -12,6 +12,7 @@ DEV_CASES_PATH = PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v0_cases.
 CALIBRATION_OUTPUT_PATH = PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v1_calibration_cases.jsonl"
 HOLDOUT_OUTPUT_PATH = PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v1_holdout_cases.jsonl"
 HOLDOUT_V2_OUTPUT_PATH = PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v2_holdout_cases.jsonl"
+RETRIEVAL_POOL_OUTPUT_PATH = PROJECT_ROOT / "data" / "processed" / "fraudops_bench_retrieval_pool_cases.jsonl"
 
 # Same pool criteria the original 50 dev cases were drawn from: card-not-
 # present-style rows with some device signal present (device_type/device_info
@@ -19,9 +20,11 @@ HOLDOUT_V2_OUTPUT_PATH = PROJECT_ROOT / "data" / "processed" / "fraudops_bench_v
 # and transaction amount.
 CALIBRATION_N_PER_CLASS = 60   # n=120
 HOLDOUT_N_PER_CLASS = 150      # n=300
+RETRIEVAL_POOL_N_PER_CLASS = 250  # n=500
 CALIBRATION_RANDOM_STATE = 101
 HOLDOUT_RANDOM_STATE = 202
 HOLDOUT_V2_RANDOM_STATE = 303
+RETRIEVAL_POOL_RANDOM_STATE = 404
 
 AVAILABLE_TOOLS = [
     "get_transaction_details",
@@ -190,14 +193,48 @@ def generate_holdout_v2():
           f"({sum(c['ground_truth_is_fraud'] for c in holdout_v2_cases)} fraud)")
 
 
+def generate_retrieval_pool():
+    """A dedicated, disjoint pool of labeled cases used only as the k-NN
+    exemplar source for linear_retrieval/agentic_retrieval (see
+    src/retrieval.py). Disjoint from every existing split via
+    load_excluded_transaction_ids() (dev+calibration+holdout+holdout_v2),
+    same pattern as generate_holdout_v2(). Never itself scored as a case,
+    and added to SPLITS in splits.py so it's protected from ever leaking
+    into a future split the same way every other split already is."""
+    print("Loading merged IEEE-CIS dataframe...")
+    df = load_merged_dataframe()
+
+    excluded_ids = load_excluded_transaction_ids()
+    print(f"Excluding {len(excluded_ids)} existing benchmark-case transaction_ids "
+          f"(dev+calibration+holdout+holdout_v2) from the sampling pool.")
+
+    pool = build_pool(df, exclude_ids=excluded_ids)
+    print(f"Pool after exclusion: {len(pool)} rows "
+          f"({(pool['isFraud'] == 1).sum()} fraud, {(pool['isFraud'] == 0).sum()} non-fraud)")
+
+    retrieval_pool_sample = sample_balanced(pool, RETRIEVAL_POOL_N_PER_CLASS, RETRIEVAL_POOL_RANDOM_STATE)
+    retrieval_pool_ids = set(retrieval_pool_sample["TransactionID"].astype(int))
+    assert excluded_ids.isdisjoint(retrieval_pool_ids), "retrieval_pool overlaps an existing split"
+
+    retrieval_pool_cases = build_cases(retrieval_pool_sample, "POOL")
+    write_jsonl(retrieval_pool_cases, RETRIEVAL_POOL_OUTPUT_PATH)
+
+    print(f"Wrote {len(retrieval_pool_cases)} retrieval_pool cases to {RETRIEVAL_POOL_OUTPUT_PATH} "
+          f"({sum(c['ground_truth_is_fraud'] for c in retrieval_pool_cases)} fraud)")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--holdout-v2", action="store_true",
                          help="generate the fresh holdout_v2 replacement set instead of calibration+holdout")
+    parser.add_argument("--retrieval-pool", action="store_true",
+                         help="generate the retrieval_pool exemplar set instead of calibration+holdout")
     args = parser.parse_args()
 
     if args.holdout_v2:
         generate_holdout_v2()
+    elif args.retrieval_pool:
+        generate_retrieval_pool()
     else:
         generate_calibration_and_holdout()
 

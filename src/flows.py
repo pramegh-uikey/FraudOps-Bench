@@ -161,8 +161,10 @@ def run_direct(case: dict, sop_text: str, backend: str, model: str, **call_kwarg
     return _run_completion_flow(_make_direct_prompt(case, sop_text), backend, model, **call_kwargs)
 
 
-def _make_linear_prompt(packet: dict, sop_text: str) -> str:
+def _make_linear_prompt(packet: dict, sop_text: str, exemplar_text: str | None = None) -> str:
     packet_for_agent = strip_hidden_field(packet)
+
+    exemplar_section = f"\n{exemplar_text}\n" if exemplar_text else ""
 
     return f"""
 You are a fraud analyst reviewing a card-not-present transaction alert.
@@ -174,7 +176,7 @@ SOP:
 
 CASE WITH TOOL EVIDENCE:
 {json.dumps(packet_for_agent, indent=2)}
-
+{exemplar_section}
 Important rules:
 - You have been provided outputs from all available investigation tools.
 - Use the tool evidence to complete the required checks.
@@ -190,7 +192,18 @@ Return this exact JSON structure:
 
 
 def run_linear(packet: dict, sop_text: str, backend: str, model: str, **call_kwargs) -> FlowResult:
-    return _run_completion_flow(_make_linear_prompt(packet, sop_text), backend, model, **call_kwargs)
+    # use_retrieval (configs/models.yaml, linear_retrieval arm): ground the
+    # fraud_probability in nearest-neighbor exemplars from retrieval_pool
+    # (src/retrieval.py) rather than an unaided guess -- see
+    # docs/future_work.md and paper Section 5.3's discretization diagnosis.
+    use_retrieval = call_kwargs.pop("use_retrieval", False)
+    exemplar_text = None
+    if use_retrieval:
+        import retrieval
+        exemplar_text = retrieval.get_exemplar_text(packet)
+    return _run_completion_flow(
+        _make_linear_prompt(packet, sop_text, exemplar_text), backend, model, **call_kwargs
+    )
 
 
 # run_agentic is imported from agentic_graph above (see top of file).

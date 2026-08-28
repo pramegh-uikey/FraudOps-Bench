@@ -23,7 +23,7 @@ FLOW_RUNNERS = {
 CALL_KWARG_KEYS = {
     "max_tokens", "temperature", "num_ctx", "base_url",
     "max_retries", "base_delay_s", "max_delay_s",
-    "self_consistency",
+    "self_consistency", "use_retrieval",
 }
 
 
