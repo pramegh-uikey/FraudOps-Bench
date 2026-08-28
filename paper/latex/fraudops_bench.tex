@@ -112,12 +112,21 @@ calibration procedure's own overfit-guard fell back to its most
 conservative behavior on thin support and that same caution held up
 faithfully on fresh holdout data. We report faithfulness scoring (two
 independent methods, ${\sim}99\%$ evidence-attribution accuracy across
-all four LLM arms), a structured error taxonomy, and an ablation of the
-agent's self-consistency mechanism. We argue the calibration failure mode
-itself -- not just the fix -- is a transferable lesson for anyone doing
-selective prediction with LLM confidence scores on small calibration
-sets, and the cross-model check is a first piece of direct evidence for
-that transferability claim.
+all six LLM arms scored), a structured error taxonomy, and an ablation of the
+agent's self-consistency mechanism. We also test a first attempt at
+addressing the discretization mechanism directly: grounding
+\code{fraud\_probability} in retrieved, similar past cases with known
+outcomes rather than an unaided guess. The result is genuinely mixed --
+the best full-curve LLM performance in the paper (AURC 0.090 for the
+retrieval-augmented agentic arm, versus 0.112 without retrieval), but the
+motivating discretization hypothesis does not hold on inspection, and
+both retrieval arms pay a measurable cost in semantic faithfulness. We
+argue the calibration failure mode itself -- not just the fix -- is a
+transferable lesson for anyone doing selective prediction with LLM
+confidence scores on small calibration sets; the cross-model check is a
+first piece of direct evidence for that transferability claim, and the
+retrieval result is reported as an honest first step toward a mechanism-
+level fix, not a solved problem.
 \end{abstract}
 
 \begin{keywords}
@@ -228,6 +237,13 @@ share.
   (OpenAI), testing whether the calibration-discretization risk and the
   classical-ML-dominates-in-practice finding are Claude-specific or
   general.
+\item A first attempt at addressing the discretization mechanism
+  directly rather than only correcting for it statistically:
+  retrieval-augmented exemplars, grounding \code{fraud\_probability} in
+  similar past cases with known outcomes. The result is genuinely mixed
+  and reported as such -- the best full-curve LLM performance in this
+  paper, but the motivating discretization hypothesis does not hold for
+  the agentic arm, and both arms pay a measurable faithfulness cost.
 \end{enumerate}
 
 The rest of the paper proceeds as follows. Section 2 positions this work
@@ -235,7 +251,8 @@ against prior fraud-LLM and agent-benchmark literature. Section 3
 describes FraudOps-Bench's design. Section 4 reports a two-method
 faithfulness evaluation of the LLM arms' cited evidence. Section 5 is the
 central empirical contribution: the calibration failure, its diagnosis,
-fix, validation, and a replication check on a second model. Section 6
+fix, validation, a replication check on a second model, and a first
+mechanism-level fix attempt via retrieval-augmented exemplars. Section 6
 reports a self-consistency ablation. Section 7 reports cost and latency.
 Section 8 discusses implications, Section 9 states limitations directly,
 and Section 10 concludes.
@@ -392,7 +409,11 @@ paper's primary model. Section 5.7 additionally reports the identical
 \code{linear}/\code{agentic} flows run on a second model, GPT-5.6 Terra
 (OpenAI) -- denoted \code{linear_gpt}/\code{agentic_gpt} -- as a
 cross-model replication check on the calibration methodology and the
-practical-performance finding. The local-model variants
+practical-performance finding. Section 5.8 further reports
+\code{linear\_retrieval}/\code{agentic\_retrieval} -- the same flows and
+Claude Sonnet 5 model, with $k$-nearest-neighbor exemplars from a
+dedicated \code{retrieval\_pool} split injected into the prompt. The
+local-model variants
 (\code{linear_local}/\code{agentic_local}, built but not run -- see
 Limitations) remain out of scope for this report.
 
@@ -691,17 +712,18 @@ arm's own selected operating point (the one reported in Table 3) is
 \begin{figure*}[!t]
 \centering
 \includegraphics[width=0.85\textwidth]{images/risk_coverage_curves.png}\\[4pt]
-\parbox{0.85\textwidth}{\textbf{FIGURE 2.} Full risk-coverage curves per
-arm, all five arms
-(\code{outputs/holdout_v2/risk_coverage_curves.png}), with each Claude/
-classical-ML arm's actual reported operating point marked (Section 5.7's
-GPT arms omitted from the marked-point overlay for legibility; see Table
-7 for their operating points). \code{classical_ml}'s curve dominates
-every LLM arm from either model across nearly the entire coverage range,
-not merely at the specific chosen operating points -- area under the
-risk-coverage curve (AURC) 0.0343 (\code{classical_ml}) vs.\ 0.1080
-(\code{linear_api}) vs.\ 0.1117 (\code{agentic_api}) vs.\ 0.1850
-(\code{linear_gpt}) vs.\ 0.2046 (\code{agentic_gpt}); lower is better.}
+\parbox{0.85\textwidth}{\textbf{FIGURE 2.} Full risk-coverage curves,
+all seven arms
+(\code{outputs/holdout_v2/risk_coverage_curves.png}), with every arm's
+own actual reported operating point marked. \code{classical_ml}'s curve
+dominates every LLM arm across nearly the entire coverage range, not
+merely at the specific chosen operating points -- area under the
+risk-coverage curve (AURC) 0.0343 (\code{classical_ml}) vs.\ 0.0896
+(\code{agentic_retrieval}) vs.\ 0.0982 (\code{linear_retrieval}) vs.\
+0.1080 (\code{linear_api}) vs.\ 0.1117 (\code{agentic_api}) vs.\ 0.1850
+(\code{linear_gpt}) vs.\ 0.2046 (\code{agentic_gpt}); lower is better.
+The two retrieval-augmented arms (Section 5.8) reach the lowest AURC of
+any LLM arm in the study.}
 \end{figure*}
 
 \begin{table}[H]
@@ -824,9 +846,10 @@ evidence the guard's caution was well-founded. \code{linear_gpt} lands at
 24.7\%-coverage cell in Table 4, but at meaningfully lower accuracy there
 (0.918 vs.\ 0.959).
 
-Read against the full risk-coverage curve (Figure 2, now showing all five
-arms): \code{classical_ml} continues to dominate every LLM arm from
-either model across nearly the entire coverage range. AURC for the GPT
+Read against the full risk-coverage curve (Figure 2, which shows all
+seven arms reported in this paper): \code{classical_ml} continues to
+dominate every LLM arm from either model across nearly the entire
+coverage range. AURC for the GPT
 arms is 0.1850 (\code{linear_gpt}) and 0.2046 (\code{agentic_gpt}) --
 both worse (higher) than either Claude arm (0.1080, 0.1117) and far worse
 than \code{classical_ml} (0.0343). At every band swept in Table 4's
@@ -885,6 +908,167 @@ different failure shapes, which is itself useful evidence that the fix
 model-agnostic work rather than being tuned to one model's specific
 discretization pattern.
 
+\subsection*{5.8 Retrieval-augmented exemplars: a mechanism check}
+
+Sections 5.1--5.7 diagnose the discretization problem and validate a
+statistical fix (LCB selection) around it, but neither changes what the
+model is asked to do when it states a probability. This section tests a
+first attempt at addressing the mechanism directly: ground each case's
+\code{fraud_probability} in a handful of similar past cases with known
+outcomes, rather than an unaided verbalized guess, on the hypothesis that
+a nearest-neighbor-style signal is naturally less prone to the
+round-number anchoring Section 5.3 documents.
+
+\textbf{Method.} A dedicated \code{retrieval\_pool} split ($n=500$,
+250/250 fraud, disjoint from every existing split via the same
+leakage-guard used throughout this benchmark) was sampled from
+previously-unused IEEE-CIS transactions -- pool construction and
+evidence-packet generation are local, deterministic, and free (no API
+calls). For a new case, its $k=5$ nearest neighbors in the pool are
+retrieved via Euclidean distance over a standardized feature vector built
+from the same evidence surface the LLM/analyst sees (transaction amount,
+card/device/email-domain history, velocity and identity-match signals) --
+deliberately independent of \code{classical\_ml}'s own batch, cumulative-
+stats feature pipeline, to keep the comparison clean. The retrieved
+cases' confirmed outcomes are surfaced as an explicit
+``similar past cases'' block appended to the existing prompt, for both
+\code{linear\_retrieval} (a direct extension of \code{linear\_api}) and
+\code{agentic\_retrieval} (\code{agentic\_api}, with the same block baked
+into the brain and finalize prompts rather than exposed as a seventh
+tool, keeping the six-tool architecture and Table 1's arm descriptions
+intact). $k$ and the feature set were frozen before any calibration run
+and are covered by \code{freeze\_methodology.py}'s manifest, the same
+discipline as every other methodology-defining file in this benchmark.
+
+\textbf{Calibration ($n=120$).} Both arms cleared the LCB target
+organically, no fallback needed. \code{linear\_retrieval} selected band
+(0.2, 0.8) (LCB accuracy 0.903, mean 0.942, 43/118 decided).
+\code{agentic\_retrieval} selected band (0.35, 0.65) (LCB accuracy 0.895,
+mean 0.933, 71/120 decided) -- notably \textit{narrower} than
+\code{agentic\_api}'s own band (0.25, 0.75) at a comparable accuracy bar,
+with far more calibration-time coverage, an early signal worth checking
+on holdout rather than trusting on $n=120$ alone.
+
+\begin{table}[H]
+\centering
+\textbf{TABLE 9. \code{holdout\_v2} results for the retrieval-augmented
+arms (n=300).}\\[2pt]
+\scriptsize
+\begin{tabularx}{\columnwidth}{@{}lYYYYYYY@{}}
+\toprule
+\textbf{Arm} & \textbf{Band} & \textbf{Cov.} & \textbf{Acc.} &
+\textbf{Prec.} & \textbf{Rec.} & \textbf{F1} & \textbf{Cov.-wt.} \\
+\midrule
+\code{linear\_retrieval} & (.2,.8) & 30.7\% & 0.946 & 0.958 & 0.972 & 0.965 & 29.0\% \\
+\code{agentic\_retrieval} & (.35,.65) & 45.0\% & 0.933 & 0.918 & 0.975 & 0.945 & 42.0\% \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\textbf{TABLE 10. Bootstrap 95\% CIs, retrieval-augmented arms (10,000
+resamples).}\\[2pt]
+\footnotesize
+\begin{tabularx}{\columnwidth}{@{}lXXX@{}}
+\toprule
+\textbf{Arm} & \textbf{Accuracy} & \textbf{Coverage} & \textbf{Cov.-wt.} \\
+\midrule
+\code{linear\_retrieval} & 0.946 [0.894, 0.989] & 0.307 [0.257, 0.360] & 0.290 [0.240, 0.343] \\
+\code{agentic\_retrieval} & 0.934 [0.890, 0.971] & 0.450 [0.393, 0.507] & 0.420 [0.367, 0.477] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Read against the full risk-coverage curve (Figure 2, now showing all
+seven arms): \code{agentic\_retrieval} reaches AURC 0.0896 and
+\code{linear\_retrieval} 0.0982 -- both \textit{better} (lower) than
+every other LLM arm in this paper, Claude or GPT-5.6 Terra
+(\code{linear\_api} 0.1080, \code{agentic\_api} 0.1117, \code{linear\_gpt}
+0.1850, \code{agentic\_gpt} 0.2046), and the closest any LLM arm gets to
+\code{classical\_ml}'s 0.0343 across the whole study. This is a genuine
+full-curve improvement, not an artifact of one favorable operating point:
+\code{agentic\_retrieval}'s curve sits above \code{agentic\_api}'s
+through most of the coverage range. \code{agentic\_retrieval}'s coverage
+nearly tripled relative to \code{agentic\_api} (45.0\% vs.\ 17.0\%) at a
+2.8-point accuracy cost (93.3\% vs.\ 96.1\%), and coverage-weighted
+correctness rose from 16.3\% to 42.0\%.
+
+One caveat worth stating precisely, since the two metrics in this paper
+can disagree and did here: \code{linear\_api} and \code{agentic\_retrieval}
+happen to share an identical calibrated band, (0.35, 0.65), which makes
+them directly comparable at that one point -- and there,
+\code{linear\_api} still wins on coverage-weighted correctness (46.3\%
+vs.\ 42.0\%), because its own calibration procedure selected a
+higher-coverage point (50.7\% vs.\ 45.0\%) that outweighs
+\code{agentic\_retrieval}'s accuracy edge in the coverage$\times$accuracy
+product. \code{agentic\_retrieval} is the better performer \textit{across
+the full curve} (lower AURC); \code{linear\_api} remains the strongest
+LLM arm \textit{at its own specific calibrated operating point}. Both are
+true, and Section 8's point about single-number comparisons applies here
+as much as it does to the original three arms.
+
+\textbf{The mechanism check, reported honestly.} The motivating
+hypothesis was that retrieval grounding would reduce round-number
+anchoring in the raw \code{fraud\_probability} values themselves. Checked
+directly against \code{agentic\_api}'s actual holdout distribution: it
+does not, materially. The three most common values account for 50.0\% of
+\code{agentic\_retrieval}'s outputs (25 unique values across 300 cases)
+versus 52.3\% for \code{agentic\_api} (27 unique values) -- essentially
+unchanged, and the dominant values themselves (0.4, 0.6, 0.62, \dots) are
+the same ones. \code{linear\_retrieval} shows a real but modest
+reduction (38.5\% top-3 concentration, 44 unique values, vs.\
+\code{linear\_api}'s 44.6\%, 37 unique values). Whatever is producing
+\code{agentic\_retrieval}'s coverage and AURC gains, it is not primarily
+a smoother, less-discretized probability signal -- the more plausible
+account is that retrieval grounding improves the reliability of the
+model's judgment \textit{within} the same discretized value buckets
+(better-grounded reasoning per bucket), not the granularity of the
+buckets themselves. That is a different, narrower claim than the one
+motivating this experiment, and it is reported as such rather than
+retrofit to the original hypothesis.
+
+\textbf{Faithfulness.} Both methods were rerun identically.
+\textbf{Method 1} (deterministic numeric cross-referencing) shows both
+arms at ${\sim}98.9\%$ verified (\code{linear\_retrieval}: 12{,}557/
+12{,}703; \code{agentic\_retrieval}: within the same range), in line with
+every other arm in this paper (98.8--99.6\%). \textbf{Method 2}
+(LLM-judge, 25-case samples, \code{claude-haiku-4-5}) tells a less
+favorable story: \code{linear\_retrieval} shows misattributions in 10/24
+judged cases (41.7\%) and \code{agentic\_retrieval} in 14/25 (56.0\%) --
+both higher than their \code{\_api} counterparts (25.0\% and 33.3\%
+respectively). Manual inspection of the flagged cases finds the same
+categories already documented in \code{docs/error\_taxonomy.md} (minor
+rounding-precision framing, field mislabeling, interpretive over-framing
+of correlational evidence) rather than fabrication, but there are simply
+more of them -- a real cost of retrieval grounding, not hidden behind the
+accuracy gain. A plausible if unconfirmed explanation is that the
+exemplar block gives the judge more total surface area to find fault
+with; this has not been verified and is not asserted as fact.
+
+\textbf{Cost.} Combined calibration and holdout for both arms: \$107.70
+(zero errors across all 840 API calls); faithfulness judging added
+\$0.44. \code{linear\_retrieval} costs \$0.128/case (55.6s mean latency),
+\code{agentic\_retrieval} \$0.133/case (33.0s) -- both in line with their
+\code{\_api} counterparts.
+
+\textbf{Interpretation.} Retrieval-augmented exemplars are the best
+full-curve LLM performer in this paper, and the coverage gain for the
+agentic arm in particular is large enough to be practically meaningful,
+not a rounding difference. But the result is genuinely mixed, not a
+clean win: \code{linear\_retrieval} underperforms \code{linear\_api} on
+coverage-weighted correctness at its own operating point even as its
+full curve improves; the discretization mechanism motivating the
+experiment did not hold, at least not for the agentic arm; and both
+arms pay a real faithfulness cost under the stricter LLM-judge check.
+This section was run under the same single-use-holdout, frozen-
+methodology discipline as everything else in this paper, but without a
+repeat-run stochasticity check analogous to Section 5.1a's -- unlike the
+original calibration-failure diagnosis, there is no direct estimate of
+ordinary run-to-run noise for these two specific arms, so some part of
+the reported gain could in principle reflect variance rather than a
+stable effect (see Limitations).
+
 \section*{6. Ablation: Self-Consistency}
 
 Self-consistency (\code{resolve_with_second_opinion},
@@ -902,7 +1086,7 @@ threshold, not a re-tune.
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 9. Self-consistency on vs.\ off,
+\textbf{TABLE 11. Self-consistency on vs.\ off,
 \code{holdout_v2} (n=300).}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lXYY@{}}
@@ -946,7 +1130,7 @@ isn't moving the accuracy needle at this operating point.
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 10. Mean cost and latency per case.}\\[2pt]
+\textbf{TABLE 12. Mean cost and latency per case.}\\[2pt]
 \begin{tabularx}{\columnwidth}{@{}lYY@{}}
 \toprule
 \textbf{Arm} & \textbf{Mean cost/case} & \textbf{Mean latency/case} \\
@@ -956,6 +1140,8 @@ isn't moving the accuracy needle at this operating point.
 \code{agentic_api} & \$0.132 & 57.8s \\
 \code{linear_gpt} & \$0.053 & 21.4s \\
 \code{agentic_gpt} & \$0.160 & 53.8s \\
+\code{linear_retrieval} & \$0.128 & 55.6s \\
+\code{agentic_retrieval} & \$0.133 & 33.0s \\
 \code{classical_ml} & ${\sim}\$0$ (local) & ${\sim}0$s \\
 \bottomrule
 \end{tabularx}
@@ -976,7 +1162,14 @@ cheaper, 3x faster -- though at lower coverage-weighted correctness
 (Table 7); \code{agentic_gpt} costs slightly more than \code{agentic_api}
 per case despite a real 47\% cache-hit rate on input tokens, an
 unconfirmed cost difference worth a closer look before treating it as
-settled (\code{docs/methodology_log.md}, 2026-08-28 entry).
+settled (\code{docs/methodology_log.md}, 2026-08-28 entry). The
+retrieval-augmented arms (Section 5.8) cost \$107.70 combined across
+calibration and holdout (zero errors across 840 calls), close to
+\code{linear\_api}/\code{agentic\_api}'s own per-case cost despite the
+added exemplar-block tokens; \code{agentic\_retrieval}'s notably shorter
+mean latency (33.0s vs.\ \code{agentic\_api}'s 57.8s) was not
+investigated further and should not be over-interpreted without
+inspecting the underlying tool-call/turn counts directly.
 
 \section*{8. Discussion}
 
@@ -1056,6 +1249,25 @@ selective-prediction threshold against a new LLM should expect the same
 class of risk this paper documents for Claude, not assume it away
 because the failure will not necessarily look identical.
 
+Section 5.8's retrieval-augmented exemplars are this paper's one attempt
+to move beyond diagnosing and statistically correcting for the
+discretization problem, toward addressing it directly -- and it is worth
+being precise about what that attempt actually shows. It is not a fix
+for LLM probability discretization: the raw \code{fraud\_probability}
+distribution for the agentic arm is essentially unchanged by retrieval
+grounding, still anchored to the same round values in nearly the same
+proportions. What it does appear to do is improve decision quality
+\textit{within} that same discretized structure, enough to produce the
+best full-curve LLM result in this paper (AURC 0.0896) and to nearly
+triple the agentic arm's practical coverage. That is a real, useful
+result on its own terms, but it should not be read as evidence the
+discretization risk documented in Sections 5.3 and 5.7 is solved --
+only that a different intervention, aimed at a different part of the
+problem, can still move the practical numbers. The faithfulness cost
+(Section 5.8) and the absence of a repeat-run stochasticity check for
+these two arms (Section 9) are both reasons to treat this as a
+promising first result rather than a settled one.
+
 \subsection*{Ethical considerations}
 
 FraudOps-Bench uses only the public, already-anonymized IEEE-CIS Kaggle
@@ -1096,6 +1308,26 @@ Stated directly, not hedged:
   estimate exists for GPT-5.6 Terra to rule out ordinary generation
   stochasticity the way Section 5.1a does for Claude. \code{direct_control}
   was also not rerun for this model.
+\item \textbf{Retrieval-augmented arms have no repeat-run stochasticity
+  check.} Unlike the original calibration-failure diagnosis (Section
+  5.1a's $\pm 1.7$pt estimate), \code{linear\_retrieval} and
+  \code{agentic\_retrieval} (Section 5.8) were each run once on
+  \code{holdout\_v2}. Some part of the reported AURC and coverage gains
+  could in principle reflect ordinary run-to-run variance rather than a
+  stable effect; the result should be read as promising, not as a
+  fully validated claim to the same standard as Sections 5.1--5.6. The
+  self-consistency ablation (Section 6) was also not rerun for these
+  arms -- self-consistency was left on (the default) throughout, matching
+  \code{linear\_api}/\code{agentic\_api}'s primary-report configuration.
+\item \textbf{The retrieval-augmentation mechanism is not understood.}
+  Section 5.8 finds a real practical improvement without a confirmed
+  causal account of why: the motivating discretization hypothesis does
+  not hold on inspection, and the most plausible alternative explanation
+  (better-grounded reasoning within the same discretized value buckets)
+  is not independently verified. The $k=5$ and feature-set choices, while
+  frozen before calibration per this benchmark's own discipline, were
+  made once under time constraints rather than tuned or ablated; whether
+  a different $k$ or feature basis performs better or worse is untested.
 \item \textbf{Self-authored SOP.} The fraud-analyst SOP was written by
   the researchers, not validated by a practicing fraud analyst. It may
   not reflect real institutional practice.
@@ -1144,7 +1376,16 @@ conclusion (classical ML dominates the full risk-coverage curve against
 every LLM arm tested) and surfaces a second, differently-shaped
 calibration difficulty traceable to the same root cause -- a modestly
 sized calibration set meeting a specific model's probability-output
-behavior.
+behavior. Section 5.8 takes a first, honest step from diagnosis toward a
+mechanism-level fix -- grounding \code{fraud\_probability} in retrieved
+similar cases -- and finds a real practical gain (the best full-curve
+LLM result in this paper) without confirming the discretization
+mechanism it set out to test. We read that as a useful, if incomplete,
+result: evidence that this class of problem is addressable, not evidence
+that it has been solved. A repeat-run stochasticity check for the
+retrieval-augmented arms, and understanding \textit{why} retrieval
+grounding helps if the effect proves stable, are natural next steps
+before it is treated as more than a promising first result (Section 9).
 
 Several deliberate scope cuts bound what this paper claims. No human
 fraud analyst was involved in this evaluation round -- there is no human
@@ -1160,6 +1401,13 @@ round's scope. Deeper architecture ablations beyond the single
 self-consistency check reported in Section 6 (supervisor-node necessity,
 tool-count sensitivity, in light of SOP-Bench's \cite{sopbench2025}
 finding that larger tool registries can hurt task success) remain open.
+Reinforcement learning directly against a calibration-quality reward
+(e.g.\ a proper scoring rule on \code{fraud\_probability} against ground
+truth) is a natural further direction once retrieval's own mechanism is
+better understood, but was deliberately deferred rather than attempted
+in this round -- Section 5.8's finding that retrieval's gain does not
+route through reduced discretization is itself a reason for caution
+about any reward design that assumes it does.
 Cross-model replication is no longer fully open -- Section 5.7 reports
 one additional model -- but remains partial: GPT-5.6 Terra was not
 carried through the self-consistency ablation or the repeat-run
@@ -1168,7 +1416,9 @@ stochasticity check (Section 9), and providers beyond Claude and OpenAI
 calibration-failure diagnosis-and-fix methodology, more than any specific
 accuracy number reported here, as the part of this work most worth other
 selective-prediction practitioners carrying forward -- reinforced, now,
-by its holding up on a second model rather than resting on one.
+by its holding up on a second model rather than resting on one, and
+complemented by Section 5.8's evidence that the underlying problem is at
+least partially addressable, not just diagnosable.
 
 \section*{Data and Code Availability}
 
@@ -1193,12 +1443,28 @@ Introduction, Related Work, Discussion, and Conclusion and Future Work
 sections, to identify and verify the prior-work citations in the
 References section, and to integrate existing experimental data (the
 Section 5.1a repeat-run variance table and the error-taxonomy findings
-referenced in Section 8) into the manuscript text. All experimental
-design, code, data collection, and statistical analysis were performed
-by the authors; all AI-assisted text and citations were reviewed and
-verified by the authors against the underlying source data
-(\code{docs/methodology_log.md}, \code{docs/error_taxonomy.md}, and
-\code{outputs/holdout_v2/}) before inclusion.
+referenced in Section 8) into the manuscript text. For Sections 4--7 and
+Section 5.1--5.7, all experimental design, code, data collection, and
+statistical analysis were performed by the authors; all AI-assisted text
+and citations were reviewed and verified by the authors against the
+underlying source data (\code{docs/methodology_log.md},
+\code{docs/error_taxonomy.md}, and \code{outputs/holdout_v2/}) before
+inclusion. Section 5.8's retrieval-augmented exemplars experiment
+(retrieval-pool construction, the $k$-nearest-neighbor mechanism in
+\code{src/retrieval.py}, its integration into the existing arms, the
+calibration and holdout runs, and the statistical analysis reported)
+was designed and implemented by Claude Code (Anthropic) under the
+authors' direction, working from the failure mode documented in Section
+5.3 and the authors' explicit instruction to test whether it could be
+addressed directly rather than only corrected for statistically. The
+authors reviewed the resulting code, verified the reported numbers
+against the underlying run outputs
+(\code{outputs/calibration/\{linear,agentic\}\_retrieval*},
+\code{outputs/holdout\_v2/\{linear,agentic\}\_retrieval*}), and take full
+responsibility for the experimental design choices, the interpretation
+reported, and the decision to include this result in the paper. This is
+a materially deeper level of AI involvement than Sections 4--7 and is
+disclosed as such rather than folded into the general statement above.
 
 \begin{thebibliography}{23}
 
