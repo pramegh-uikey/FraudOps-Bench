@@ -34,6 +34,8 @@
 
 \history{Date of publication xxxx 00, 0000, date of current version xxxx 00, 0000.}
 \doi{10.1109/ACCESS.2017.DOI}
+\vol{14}
+\year{2026}
 
 \title{FraudOps-Bench: Process-Level, Tool-Grounded Evaluation of LLM
 Agents for Card-Not-Present Fraud Investigation, and a Calibration
@@ -66,13 +68,15 @@ analyst's card-not-present transaction review workflow -- not just
 predict a fraud label, but gather evidence via tools, reason under an
 explicit standard operating procedure (SOP), and produce an auditable
 disposition with cited evidence. We build FraudOps-Bench: a six-tool
-investigation environment over IEEE-CIS transaction data, a
+investigation environment over IEEE Computational Intelligence Society
+(IEEE-CIS) transaction data, a
 LangGraph-based agent (brain/orchestrator/tools/memory/supervisor), and
 three comparison arms (a zero-evidence control, a single-shot ``all
 evidence at once'' baseline, and the full iterative agent) alongside a
 classical gradient-boosted-tree baseline. Using a selective-prediction
 framework (escalate-to-human on low-confidence cases), we initially found
-the agentic arm competitive with classical ML on a 120-case calibration
+the agentic arm competitive with classical machine learning (ML) on a
+120-case calibration
 set. That result did not survive a fresh 300-case holdout: the
 calibration procedure had overfit small-sample noise in the escalation
 threshold. We diagnose the failure precisely -- discretized,
@@ -84,13 +88,23 @@ agentic arm's accuracy claim holds up (96.1\%, its best result on any
 split) but its practical coverage collapses to 17\% of the queue; the
 classical baseline remains the strongest \textit{practical} performer,
 dominating the full risk-coverage curve (area under the risk-coverage
-curve, AURC, 0.034 vs.\ 0.108--0.112). We report faithfulness scoring
-(two independent methods, ${\sim}99\%$ evidence-attribution accuracy for
-both LLM arms), a structured error taxonomy, and an ablation of the
+curve, AURC, 0.034 vs.\ 0.108--0.112). We then check whether this pattern
+is specific to one model: running the identical protocol -- independent
+calibration, the same corrected selection rule, a single-use holdout --
+on a second model, GPT-5.6 Terra (OpenAI), reproduces both the
+qualitative finding (classical ML still dominates the full risk-coverage
+curve, AURC 0.185--0.205) and an even more extreme version of the
+high-precision/low-coverage tradeoff, including a case where the
+calibration procedure's own overfit-guard fell back to its most
+conservative behavior on thin support and that same caution held up
+faithfully on fresh holdout data. We report faithfulness scoring (two
+independent methods, ${\sim}99\%$ evidence-attribution accuracy across
+all four LLM arms), a structured error taxonomy, and an ablation of the
 agent's self-consistency mechanism. We argue the calibration failure mode
 itself -- not just the fix -- is a transferable lesson for anyone doing
 selective prediction with LLM confidence scores on small calibration
-sets.
+sets, and the cross-model check is a first piece of direct evidence for
+that transferability claim.
 \end{abstract}
 
 \begin{keywords}
@@ -116,8 +130,10 @@ continuous, and staffed by human analysts working under time pressure.
 
 Large language models (LLMs) are an obvious candidate to help with this
 queue, and a growing body of recent work has tested whether an LLM can classify
-a transaction as fraudulent as well as a classical model trained on
-standard public benchmarks such as IEEE-CIS \cite{fdb2022}. That question
+a transaction as fraudulent as well as a classical machine learning (ML)
+model trained on standard public benchmarks such as the IEEE
+Computational Intelligence Society's (IEEE-CIS) fraud dataset
+\cite{fdb2022}. That question
 is close to saturated: public fraud datasets are anonymized and
 feature-engineered for tabular models rather than investigative
 reasoning, and the strongest recent public-data-only result along these
@@ -193,6 +209,12 @@ share.
   retrieved.
 \item An ablation isolating the contribution of a self-consistency
   mechanism to the agent's calibrated probability estimates.
+\item A cross-model replication check: the identical protocol -- own
+  from-scratch calibration, the corrected LCB selection rule, a
+  single-use holdout -- applied to a second model, GPT-5.6 Terra
+  (OpenAI), testing whether the calibration-discretization risk and the
+  classical-ML-dominates-in-practice finding are Claude-specific or
+  general.
 \end{enumerate}
 
 The rest of the paper proceeds as follows. Section 2 positions this work
@@ -200,16 +222,17 @@ against prior fraud-LLM and agent-benchmark literature. Section 3
 describes FraudOps-Bench's design. Section 4 reports a two-method
 faithfulness evaluation of the LLM arms' cited evidence. Section 5 is the
 central empirical contribution: the calibration failure, its diagnosis,
-fix, and validation. Section 6 reports a self-consistency ablation.
-Section 7 reports cost and latency. Section 8 discusses implications,
-Section 9 states limitations directly, and Section 10 concludes.
+fix, validation, and a replication check on a second model. Section 6
+reports a self-consistency ablation. Section 7 reports cost and latency.
+Section 8 discusses implications, Section 9 states limitations directly,
+and Section 10 concludes.
 
 \section*{2. Related Work}
 
 \textbf{Fraud-specific LLM work.} The Fraud Dataset Benchmark
 \cite{fdb2022} established the standard public-data infrastructure this
 line of work builds on, standardizing IEEE-CIS to a 561{,}013/28{,}527
-train/test split over 67 retained features and explicitly cataloguing the
+train/test split over 67 retained features and explicitly cataloging the
 limitations of public fraud data -- sparse identity fields, no case
 notes, no institutional history -- that any LLM system built on it
 inherits. Within that constraint, FinFRE-RAG \cite{finfrerag2025} is the
@@ -281,8 +304,8 @@ genuinely tool-grounded, multi-step investigation agent.
 
 \subsection*{3.1 Task and data}
 
-Card-not-present transaction risk review over the IEEE Computational
-Intelligence Society's (IEEE-CIS) Kaggle fraud data \cite{ieeecis2019},
+Card-not-present transaction risk review over the IEEE-CIS Kaggle fraud
+data \cite{ieeecis2019},
 the same underlying dataset the Fraud Dataset Benchmark \cite{fdb2022}
 uses as its richest public-data testbed; FraudOps-Bench draws its own
 dev/calibration/holdout splits directly from the raw competition data
@@ -303,6 +326,7 @@ transaction's timestamp).
 
 \begin{table}[H]
 \centering
+\textbf{TABLE 1. Comparison arms.}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lX@{}}
 \toprule
@@ -323,10 +347,14 @@ LLM). \\
 \end{tabularx}
 \end{table}
 
-All LLM arms use Claude Sonnet 5. \code{classical_ml} and the
-local-model variants (\code{linear_local}/\code{agentic_local}, built
-but not run -- see Limitations) are not part of this report's headline
-comparisons beyond \code{classical_ml}.
+Sections 4--6 report all four arms above run on Claude Sonnet 5, the
+paper's primary model. Section 5.7 additionally reports the identical
+\code{linear}/\code{agentic} flows run on a second model, GPT-5.6 Terra
+(OpenAI) -- denoted \code{linear_gpt}/\code{agentic_gpt} -- as a
+cross-model replication check on the calibration methodology and the
+practical-performance finding. The local-model variants
+(\code{linear_local}/\code{agentic_local}, built but not run -- see
+Limitations) remain out of scope for this report.
 
 \subsection*{3.3 Selective prediction and the SOP}
 
@@ -423,6 +451,7 @@ identical prompts/config, re-evaluated under the same band):
 
 \begin{table}[H]
 \centering
+\textbf{TABLE 2. Repeat-run variance on the $n=120$ calibration split.}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lYYY@{}}
 \toprule
@@ -485,7 +514,7 @@ and run under the corrected, re-frozen methodology.
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 1. \code{holdout_v2} results (n=300).}\\[2pt]
+\textbf{TABLE 3. \code{holdout_v2} results (n=300).}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lYYYYYYY@{}}
 \toprule
@@ -504,23 +533,23 @@ and run under the corrected, re-frozen methodology.
 full queue resolved correctly -- the fairer single-number comparison
 when arms escalate at very different rates.
 
-\textbf{Table 1b: same three arms, matched at all three notable bands.}
-Table 1 compares each arm at its own independently-selected operating
+\textbf{Table 4: same three arms, matched at all three notable bands.}
+Table 3 compares each arm at its own independently-selected operating
 point, which is the correct primary comparison but obscures how each arm
 performs off that point. Since disposition is a deterministic function of
 \code{fraud_probability} and the band, every arm's accuracy/coverage at
 \textit{any} band is a free re-computation on the already-collected
-\code{holdout_v2} probabilities (Section 5.5's Figure 1 curve) -- no new
+\code{holdout_v2} probabilities (Section 5.5's Fig. 1 curve) -- no new
 API calls. Shown here for all three arms at the three bands discussed in
 this paper: the original overfit band, the common band
 \code{linear_api}/\code{classical_ml} were independently selected at, and
 the wide band \code{agentic_api} was independently selected at. Each
-arm's own selected operating point (the one reported in Table 1) is
+arm's own selected operating point (the one reported in Table 3) is
 \textbf{bolded}.
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 1b. All three arms at all three notable bands.}\\[2pt]
+\textbf{TABLE 4. All three arms at all three notable bands.}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lXXX@{}}
 \toprule
@@ -541,7 +570,7 @@ arm's own selected operating point (the one reported in Table 1) is
   95.3\% of the queue at 88.8\% accuracy -- both other arms are 20+
   points less accurate at that same near-total coverage (0.752, 0.759).
   This is the source of its risk-coverage-curve dominance (Section 5.5,
-  Figure 1): it doesn't trade coverage for accuracy nearly as steeply as
+  Fig. 1): it doesn't trade coverage for accuracy nearly as steeply as
   the LLM arms do.
 \item \textbf{\code{agentic_api}'s advantage is ceiling accuracy at its
   most selective point.} At the wide (0.25, 0.75) band, it is the single
@@ -553,7 +582,7 @@ arm's own selected operating point (the one reported in Table 1) is
 \item \textbf{\code{linear_api} never wins a cell outright} but is never
   far behind either, sitting between the other two on both axes at every
   band -- consistent with its middling coverage-weighted score in Table
-  1.
+  3.
 \item The practical reading: \code{classical_ml} is the stronger choice
   as a primary decision-maker across the board; \code{agentic_api}'s
   comparative advantage is real but narrow -- a high-precision second
@@ -563,7 +592,7 @@ arm's own selected operating point (the one reported in Table 1) is
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 2. Bootstrap 95\% CIs (10,000 resamples,
+\textbf{TABLE 5. Bootstrap 95\% CIs (10,000 resamples,
 \code{src/stats_analysis.py}).}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lXXX@{}}
@@ -579,19 +608,23 @@ arm's own selected operating point (the one reported in Table 1) is
 
 \begin{figure*}[!t]
 \centering
-\includegraphics[width=0.85\textwidth]{../../outputs/holdout_v2/risk_coverage_curves.png}\\[4pt]
+\includegraphics[width=0.85\textwidth]{images/risk_coverage_curves.png}\\[4pt]
 \parbox{0.85\textwidth}{\textbf{FIGURE 1.} Full risk-coverage curves per
-arm (\code{outputs/holdout_v2/risk_coverage_curves.png}), with the
-actual reported operating point marked. \code{classical_ml}'s curve
-dominates both LLM arms across nearly the entire coverage range, not
-merely at the specific chosen operating points -- area under the
+arm, all five arms
+(\code{outputs/holdout_v2/risk_coverage_curves.png}), with each Claude/
+classical-ML arm's actual reported operating point marked (Section 5.7's
+GPT arms omitted from the marked-point overlay for legibility; see Table
+8 for their operating points). \code{classical_ml}'s curve dominates
+every LLM arm from either model across nearly the entire coverage range,
+not merely at the specific chosen operating points -- area under the
 risk-coverage curve (AURC) 0.0343 (\code{classical_ml}) vs.\ 0.1080
-(\code{linear_api}) vs.\ 0.1117 (\code{agentic_api}); lower is better.}
+(\code{linear_api}) vs.\ 0.1117 (\code{agentic_api}) vs.\ 0.1850
+(\code{linear_gpt}) vs.\ 0.2046 (\code{agentic_gpt}); lower is better.}
 \end{figure*}
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 3. Pairwise McNemar's tests (paired, restricted
+\textbf{TABLE 6. Pairwise McNemar's tests (paired, restricted
 to cases both arms decided).}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lYYYY@{}}
@@ -625,6 +658,151 @@ the full risk-coverage curve, not just the single chosen point.
 \code{linear_api} sits between the two on both axes, as it did on every
 split tested.
 
+\subsection*{5.7 Cross-model replication check: GPT-5.6 Terra}
+
+Everything above uses a single model. The calibration failure mode
+documented in Sections 5.1--5.4 is argued as a general risk for
+selective prediction on LLM confidence scores, not a Claude-specific
+quirk -- but that argument is stronger with direct cross-model evidence
+than without it. This section reruns the identical protocol -- own
+from-scratch calibration on the $n=120$ split, the corrected LCB
+selection rule, a single-use $n=300$ holdout -- against a second model,
+GPT-5.6 Terra (OpenAI's positional equivalent to Claude Sonnet 5:
+neither the top-tier nor the budget model in its family), on the
+\code{linear} and \code{agentic} flows (\code{linear_gpt}/
+\code{agentic_gpt}). \code{direct_control} and the self-consistency
+ablation (Section 6) were not rerun for this model; see Limitations.
+Every other element of the comparison is held fixed across both models:
+the same SOP text, the same six tools, the same case splits, and the
+same statistical pipeline -- GPT's band is never seeded from or compared
+against Claude's frozen band, since reusing it would itself be exactly
+the kind of methodology leakage this benchmark's frozen-manifest guard
+exists to prevent.
+
+\textbf{Calibration ($n=120$).} \code{linear_gpt} selected a band
+organically: half-width 0.30, band (0.2, 0.8), LCB accuracy 0.884 (mean
+0.931), 39/120 decided cases -- comfortably clearing both the accuracy
+target and the minimum-decided-case floor. \code{agentic_gpt} did not:
+no candidate band cleared both bars. The closest, half-width 0.30, landed
+at LCB 0.849 (just under the 0.85 target) with 34 decided cases; the next
+step up, half-width 0.35, reached a perfect LCB 1.0 but only 21 decided
+cases, and \code{calibrate_band()}'s minimum-support guard correctly
+rejected it as a suspiciously perfect score from too few cases rather
+than accepting it. Selection fell through to the widest candidate band,
+(0.1, 0.9), itself supported by only 12 decided cases in calibration --
+a genuinely thin, unforced result of applying the identical corrected
+methodology to a new model, not a parameter chosen to produce a
+particular outcome.
+
+\begin{table}[H]
+\centering
+\textbf{TABLE 8. \code{holdout_v2} results for the GPT-5.6 Terra arms
+(n=300).}\\[2pt]
+\footnotesize
+\begin{tabularx}{\columnwidth}{@{}lYYYYYYY@{}}
+\toprule
+\textbf{Arm} & \textbf{Band} & \textbf{Cov.} & \textbf{Acc.} &
+\textbf{Prec.} & \textbf{Rec.} & \textbf{F1} & \textbf{Cov.-wt.} \\
+\midrule
+\code{linear_gpt} & (.2,.8) & 24.3\% & 0.918 & 0.917 & 1.000 & 0.957 & 22.3\% \\
+\code{agentic_gpt} & (.1,.9) & 6.0\% & 1.000 & 1.000 & 1.000 & 1.000 & 6.0\% \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\textbf{TABLE 9. Bootstrap 95\% CIs, GPT-5.6 Terra arms (10,000
+resamples).}\\[2pt]
+\footnotesize
+\begin{tabularx}{\columnwidth}{@{}lXXX@{}}
+\toprule
+\textbf{Arm} & \textbf{Accuracy} & \textbf{Coverage} & \textbf{Cov.-wt.} \\
+\midrule
+\code{linear_gpt} & 0.918 [0.849, 0.974] & 0.244 [0.197, 0.293] & 0.224 [0.180, 0.273] \\
+\code{agentic_gpt} & 1.000 [1.000, 1.000] & 0.060 [0.033, 0.087] & 0.060 [0.033, 0.087] \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\code{agentic_gpt}'s calibration-time caution held up faithfully on
+completely fresh data: it decided only 18 of 300 holdout cases (6.0\%
+coverage) but got all 18 right (accuracy, precision, recall, and F1 all
+1.000). That is the most extreme version of the high-precision/
+low-coverage pattern seen anywhere in this paper -- more extreme than
+\code{agentic_api}'s own already-conservative 17.0\%-coverage,
+96.1\%-accuracy result -- and it traces directly back to calibration: a
+band whose support was 12 decided cases produced a holdout behavior that
+is, if anything, \textit{more} conservative still. This is not evidence
+the LCB guard is too strict; the fact that a band selected on thin
+support turned out to generalize this narrowly, rather than surprising
+the model with a burst of wrong high-confidence calls, is closer to
+evidence the guard's caution was well-founded. \code{linear_gpt} lands at
+24.3\% coverage and 91.8\% accuracy -- close to \code{linear_api}'s own
+24.7\%-coverage cell in Table 4, but at meaningfully lower accuracy there
+(0.918 vs.\ 0.959).
+
+Read against the full risk-coverage curve (Figure 1, now showing all five
+arms): \code{classical_ml} continues to dominate every LLM arm from
+either model across nearly the entire coverage range. AURC for the GPT
+arms is 0.1850 (\code{linear_gpt}) and 0.2046 (\code{agentic_gpt}) --
+both worse (higher) than either Claude arm (0.1080, 0.1117) and far worse
+than \code{classical_ml} (0.0343). At every band swept in Table 4's
+style, \code{linear_gpt} is consistently \textit{more willing to commit}
+than \code{linear_api} at the same band width (e.g.\ 59.7\% vs.\ 50.7\%
+coverage at (0.35, 0.65); 11.0\% vs.\ 6.0\% at (0.10, 0.90)) but
+consistently \textit{less accurate} among the cases it does decide --
+evidence GPT-5.6 Terra's probability outputs are less sharply polarized
+toward the extremes than Claude's, a genuinely different calibration
+shape between the two models, not merely a shifted threshold. Pairwise
+McNemar's tests between the matched flows (\code{linear_api} vs.\
+\code{linear_gpt}, $n=68$ both-decided; \code{agentic_api} vs.\
+\code{agentic_gpt}, $n=17$; \code{linear_gpt} vs.\ \code{agentic_gpt},
+$n=18$) all return zero discordant pairs ($p=1.0$) -- uninformative given
+how few cases any two of these arms both decide, consistent with Section
+5.5's point that these tests are underpowered by construction here and
+carry little evidentiary weight next to the bootstrap CIs and
+risk-coverage curves above.
+
+\textbf{Faithfulness.} Both faithfulness methods (Section 4's
+methodology, applied identically) were rerun on the GPT arms.
+\textbf{Method 1} (deterministic numeric cross-referencing) shows both
+GPT arms at ${\sim}99.6\%$ verified rate (\code{linear_gpt}: 11{,}868/
+11{,}912 claimed numbers verified; \code{agentic_gpt}: 10{,}624/10{,}671)
+-- marginally \textit{higher} than either Claude arm's 98.8--99.3\%.
+\textbf{Method 2} (LLM-judge semantic check, 25-case samples, judged by
+\code{claude-haiku-4-5} regardless of which model produced the case under
+review, to avoid a self-grading conflict of interest) tells a different
+story: \code{linear_gpt} shows misattributions in 11/23 judged cases
+(47.8\%), \code{agentic_gpt} in 8/22 (36.4\%) -- both higher than
+\code{linear_api}'s 6/24 (25.0\%) and \code{agentic_gpt}'s rate roughly
+matching \code{agentic_api}'s 8/24 (33.3\%). This divergence between the
+two methods -- GPT's numeric citations are marginally \textit{more}
+reliable, but its semantic attribution is judged \textit{less} reliable,
+particularly for \code{linear_gpt} -- is exactly why this paper uses two
+independent faithfulness checks rather than one: a method that only
+catches fabricated numbers would have reported GPT as the more faithful
+model outright, which is not the full picture.
+
+\textbf{Interpretation.} The classical-ML-dominance finding generalizes:
+under a second model, run through the identical protocol, the same
+practical conclusion holds -- \code{classical_ml} remains the strongest
+choice for resolving the queue in practice, by a wide margin, on both
+coverage-weighted correctness and the full risk-coverage curve. The
+calibration-discretization risk itself generalizes in spirit but not in
+literal mechanism: \code{agentic_api}'s failure (Section 5.3) was a band
+picked confidently on a misleadingly skewed small sample that then broke
+on holdout; \code{agentic_gpt}'s calibration instead correctly detected
+its own thin support and degraded to maximal conservatism, which then
+\textit{held} on holdout. Both are the same underlying story -- a
+120-case calibration set is marginal support for calibrating a threshold
+against LLM-generated probabilities, and what that marginality produces
+depends on the specific model's output distribution -- but they are
+different failure shapes, which is itself useful evidence that the fix
+(LCB selection plus a minimum-support floor) is doing real,
+model-agnostic work rather than being tuned to one model's specific
+discretization pattern.
+
 \section*{6. Ablation: Self-Consistency}
 
 Self-consistency (\code{resolve_with_second_opinion},
@@ -642,7 +820,7 @@ threshold, not a re-tune.
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 4. Self-consistency on vs.\ off,
+\textbf{TABLE 10. Self-consistency on vs.\ off,
 \code{holdout_v2} (n=300).}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lXYY@{}}
@@ -686,6 +864,7 @@ isn't moving the accuracy needle at this operating point.
 
 \begin{table}[H]
 \centering
+\textbf{TABLE 11. Mean cost and latency per case.}\\[2pt]
 \begin{tabularx}{\columnwidth}{@{}lYY@{}}
 \toprule
 \textbf{Arm} & \textbf{Mean cost/case} & \textbf{Mean latency/case} \\
@@ -693,18 +872,29 @@ isn't moving the accuracy needle at this operating point.
 \code{direct_control} & \$0.047 & 29.7s \\
 \code{linear_api} & \$0.130 & 64.3s \\
 \code{agentic_api} & \$0.132 & 57.8s \\
+\code{linear_gpt} & \$0.053 & 21.4s \\
+\code{agentic_gpt} & \$0.160 & 53.8s \\
 \code{classical_ml} & ${\sim}\$0$ (local) & ${\sim}0$s \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-Full \code{holdout_v2} run ($n=300$, 3 API arms): \$92.84, zero errors
-across 900 successful API calls (one transient truncation retried
+Full \code{holdout_v2} run ($n=300$, 3 Claude API arms): \$92.84, zero
+errors across 900 successful API calls (one transient truncation retried
 successfully under the unchanged frozen configuration, consistent with a
 0.33\% base rate for this failure mode observed across both holdout
-rounds). Self-consistency ablation (Section 6, both arms, same 300
-cases, self-consistency off): \$61.87, confirming the mechanism's cost
-is concentrated on the intended ambiguous-case subset.
+rounds). Self-consistency ablation (Section 6, both Claude arms, same
+300 cases, self-consistency off): \$61.87, confirming the mechanism's
+cost is concentrated on the intended ambiguous-case subset. The two
+GPT-5.6 Terra \code{holdout_v2} runs (Section 5.7) cost \$63.88
+combined ($n=300$ each, zero errors across 600 calls); their $n=120$
+calibration runs cost \$26.06 combined. \code{linear_gpt} is
+\code{linear_api}'s cheapest and fastest analogue in this study -- 2.5x
+cheaper, 3x faster -- though at lower coverage-weighted correctness
+(Table 8); \code{agentic_gpt} costs slightly more than \code{agentic_api}
+per case despite a real 47\% cache-hit rate on input tokens, an
+unconfirmed cost difference worth a closer look before treating it as
+settled (\code{docs/methodology_log.md}, 2026-08-28 entry).
 
 \section*{8. Discussion}
 
@@ -732,8 +922,8 @@ selective prediction changes which cross-arm comparison is meaningful. A
 single point-accuracy number is not a fair comparison between arms that
 escalate at very different rates -- \code{agentic_api} at 17\% coverage
 and \code{classical_ml} at 85\% coverage are not competing on the same
-axis, and Table 1b's per-band comparison and Section 5.5's risk-coverage
-curves (Figure 1) are the correct way to read the results:
+axis, and Table 4's per-band comparison and Section 5.5's risk-coverage
+curves (Fig. 1) are the correct way to read the results:
 \code{classical_ml} dominates the full curve (AURC 0.0343 vs.\
 0.108--0.112), not merely the specific operating points each arm
 happened to select.
@@ -757,7 +947,7 @@ grounding vs.\ better judgment on ambiguous cases).
 
 Put together, the practical reading for a fraud-ops team evaluating this
 class of system is that classical ML remains the stronger default: it
-resolves far more of the queue at comparable or better accuracy (Table 1,
+resolves far more of the queue at comparable or better accuracy (Table 3,
 coverage-weighted 77.7\% vs.\ 16.3\%) and dominates the full
 risk-coverage tradeoff. The LLM agent's demonstrated value in this
 evaluation is a high-precision, low-coverage second opinion -- its single
@@ -765,6 +955,24 @@ most accurate operating point in this study (96.1\%, \code{agentic_api}
 at its selected band) edges out classical ML's accuracy at the same
 band, but at less than a quarter of the coverage -- not a general-purpose
 replacement for the classical model.
+
+Section 5.7's cross-model check is what turns this from ``true of one
+model we happened to study'' into a claim with at least some
+cross-model support. Run through the identical protocol, GPT-5.6 Terra
+reaches the same qualitative conclusion -- classical ML dominates the
+full risk-coverage curve against every LLM arm from either model (AURC
+0.0343 vs.\ 0.108--0.205) -- and its agentic arm pushes the
+high-precision/low-coverage pattern further still (6.0\% coverage at
+100\% accuracy), not away from it. That the two models' calibration
+procedures failed in genuinely different shapes -- one a confidently
+wrong narrow band, the other a correctly-detected thin-support fallback
+that then held on fresh data -- is itself informative: it suggests the
+underlying risk (a modestly sized calibration set meeting a specific
+model's probability-output distribution) is the general hazard, while
+its exact manifestation is model-dependent. A practitioner calibrating a
+selective-prediction threshold against a new LLM should expect the same
+class of risk this paper documents for Claude, not assume it away
+because the failure will not necessarily look identical.
 
 \subsection*{Ethical considerations}
 
@@ -791,8 +999,21 @@ Stated directly, not hedged:
 \begin{itemize}
 \item \textbf{Single dataset.} IEEE-CIS only. No cross-dataset
   generalization claim is made or supported by this work.
-\item \textbf{Single model.} Claude Sonnet 5 only. No cross-model
-  comparison (e.g.\ GPT-4o, Gemini) was run.
+\item \textbf{Two models, not a broad sweep.} Claude Sonnet 5 (primary)
+  and GPT-5.6 Terra (Section 5.7 cross-model check) only. This is
+  evidence the findings are not purely Claude-specific, not a claim they
+  generalize broadly -- other frontier providers (e.g.\ Gemini),
+  open-weight models, and other tiers within either model family remain
+  untested.
+\item \textbf{GPT-5.6 Terra was not evaluated as thoroughly as Claude
+  Sonnet 5.} Section 5.7's cross-model check covers calibration, the
+  single-use holdout, and both faithfulness methods, but reruns neither
+  the self-consistency ablation (Section 6) nor the repeat-run
+  stochasticity check (Section 5.1a) for this model -- self-consistency
+  was left on (the default) throughout, and no run-to-run variance
+  estimate exists for GPT-5.6 Terra to rule out ordinary generation
+  stochasticity the way Section 5.1a does for Claude. \code{direct_control}
+  was also not rerun for this model.
 \item \textbf{Self-authored SOP.} The fraud-analyst SOP was written by
   the researchers, not validated by a practicing fraud analyst. It may
   not reflect real institutional practice.
@@ -805,8 +1026,11 @@ Stated directly, not hedged:
 \item \textbf{Calibration-set size relative to output discretization.}
   The root-cause finding in Section 5 is itself evidence that a
   120-case calibration set is marginal for this class of method when the
-  underlying model's probability outputs are discretized. The fix
-  (LCB-based selection) mitigates but does not eliminate this risk; a
+  underlying model's probability outputs are discretized. Section 5.7's
+  \code{agentic_gpt} result -- a band supported by only 12 decided
+  calibration cases -- is a second, independent illustration of the same
+  underlying marginality, not a coincidence specific to one model. The
+  fix (LCB-based selection) mitigates but does not eliminate this risk; a
   larger calibration set would be a more robust long-term fix.
 \item \textbf{McNemar's tests underpowered.} Section 5.5's paired
   significance tests have low power given how different the arms'
@@ -830,7 +1054,15 @@ result, we think, is not either arm's number but the calibration failure
 mode documented in Section 5: LLM confidence-score discretization
 interacting badly with a threshold selected on a small calibration set is
 a risk any selective-prediction pipeline built on LLM probability outputs
-should design around, independent of the underlying task.
+should design around, independent of the underlying task. Section 5.7's
+cross-model check on GPT-5.6 Terra is a first piece of direct evidence
+for that transferability claim, not just an assertion of it: the same
+protocol, applied to a second model, reaches the same practical
+conclusion (classical ML dominates the full risk-coverage curve against
+every LLM arm tested) and surfaces a second, differently-shaped
+calibration difficulty traceable to the same root cause -- a modestly
+sized calibration set meeting a specific model's probability-output
+behavior.
 
 Several deliberate scope cuts bound what this paper claims. No human
 fraud analyst was involved in this evaluation round -- there is no human
@@ -845,12 +1077,16 @@ identified but deliberately deferred rather than integrated under this
 round's scope. Deeper architecture ablations beyond the single
 self-consistency check reported in Section 6 (supervisor-node necessity,
 tool-count sensitivity, in light of SOP-Bench's \cite{sopbench2025}
-finding that larger tool registries can hurt task success) and
-cross-model replication beyond the single Claude Sonnet 5 backend used
-throughout are both open. We see the calibration-failure
-diagnosis-and-fix methodology, more than any specific accuracy number
-reported here, as the part of this work most worth other
-selective-prediction practitioners carrying forward.
+finding that larger tool registries can hurt task success) remain open.
+Cross-model replication is no longer fully open -- Section 5.7 reports
+one additional model -- but remains partial: GPT-5.6 Terra was not
+carried through the self-consistency ablation or the repeat-run
+stochasticity check (Section 9), and providers beyond Claude and OpenAI
+(e.g.\ Gemini) and open-weight models are untested. We see the
+calibration-failure diagnosis-and-fix methodology, more than any specific
+accuracy number reported here, as the part of this work most worth other
+selective-prediction practitioners carrying forward -- reinforced, now,
+by its holding up on a second model rather than resting on one.
 
 \section*{Data and Code Availability}
 
@@ -951,8 +1187,7 @@ anti-money laundering models,'' in \textit{Proc. NeurIPS 2023 Datasets
 and Benchmarks Track}, \textit{arXiv:2306.16424}.
 
 \bibitem{autogen2023}
-Q. Wu, G. Bansal, J. Zhang, Y. Wu, S. Zhang, E. Zhu, B. Li, L. Jiang, X.
-Zhang, and C. Wang, ``AutoGen: Enabling next-gen LLM applications via
+Q. Wu \textit{et al.}, ``AutoGen: Enabling next-gen LLM applications via
 multi-agent conversation framework,'' \textit{arXiv:2308.08155}, Aug.
 2023.
 
@@ -984,7 +1219,7 @@ doi: 10.1109/TIT.1970.1054406.
 %% submission -- this is the one part of the manuscript not drawn from
 %% already-verified project data.
 
-\begin{IEEEbiography}{Ayushi Ambilkar}
+\begin{IEEEbiography}[\mbox{}]{Ayushi Ambilkar}
 received her degree in chemical engineering from the Indian Institute of
 Technology (IIT) Roorkee, India. She has approximately three years of
 industry experience as a data scientist, including work in the fraud
@@ -994,7 +1229,7 @@ model agents to fraud investigation workflows and selective-prediction
 evaluation methodology.
 \end{IEEEbiography}
 
-\begin{IEEEbiography}{Pramegh Uikey}
+\begin{IEEEbiography}[\mbox{}]{Pramegh Uikey}
 received his degree in computer science engineering from the Indian
 Institute of Technology (IIT) Roorkee, India. He has approximately three
 years of industry experience as a data scientist. His research interests

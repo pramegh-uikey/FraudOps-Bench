@@ -691,3 +691,63 @@ may escalate a very large fraction of the holdout queue.
 Next: refreeze (`models.yaml`, `agentic_graph.py`, `flows.py`,
 `llm_backends.py`, `selective_prediction.py` all changed since the last
 freeze), then the single-use `holdout_v2` run for both arms.
+
+### 2026-08-28 -- GPT-5.6 Terra holdout_v2 run (n=300), faithfulness scoring, written up as Section 5.7
+
+Refroze the methodology manifest (all 6 files, including the newly-added
+`llm_backends.py`) under the `linear_gpt`/`agentic_gpt` calibrated bands
+from the prior entry, then ran both arms once, single-use, on the same
+n=300 `holdout_v2` split already used for the Claude arms -- same cases,
+same SOP, same six tools, same stats pipeline. 300/300 clean for both
+arms, 0 errors across all 600 calls.
+
+**Results (bands frozen from calibration: `linear_gpt` (0.2, 0.8),
+`agentic_gpt` (0.1, 0.9) fallback):**
+
+| Arm | Coverage | Accuracy | Precision | Recall | F1 | Coverage-weighted | Mean cost/case | Mean latency/case |
+|---|---|---|---|---|---|---|---|---|
+| `linear_gpt` | 24.3% (73/300) | 0.918 | 0.917 | 1.000 | 0.957 | 22.4% | \$0.053 | 21.4s |
+| `agentic_gpt` | 6.0% (18/300) | 1.000 | 1.000 | 1.000 | 1.000 | 6.0% | \$0.160 | 53.8s |
+
+`agentic_gpt`'s thin-support fallback band (12 decided cases in
+calibration) held up faithfully rather than breaking on fresh data --
+it just decided very little of the queue (18/300) and got all of it
+right. This is the most conservative result anywhere in this project,
+more extreme than `agentic_api`'s own 17.0%-coverage/96.1%-accuracy
+result. Read as the LCB minimum-support guard working as intended
+(refuse false confidence, degrade to caution) rather than evidence the
+guard is miscalibrated.
+
+Full risk-coverage curves regenerated for all five arms in one figure
+(`outputs/holdout_v2/risk_coverage_curves.png`, copied to
+`paper/latex/images/` for the manuscript build). AURC: `classical_ml`
+0.0343, `linear_api` 0.1080, `agentic_api` 0.1117, `linear_gpt` 0.1850,
+`agentic_gpt` 0.2046 -- `classical_ml` continues to dominate every LLM
+arm from either model across nearly the full coverage range.
+`linear_gpt` is consistently more willing to commit than `linear_api` at
+matched band widths but consistently less accurate among decided cases
+-- read as GPT-5.6 Terra's probability outputs being less sharply
+polarized than Claude's, a genuine difference in calibration shape
+rather than a shifted threshold.
+
+**Faithfulness, both methods rerun identically on the GPT arms:**
+Method 1 (deterministic numeric cross-referencing): `linear_gpt`
+99.65% verified, `agentic_gpt` 99.58% verified -- marginally *higher*
+than either Claude arm (98.8-99.3%). Method 2 (LLM-judge,
+`claude-haiku-4-5`, 25-case samples, 2-3 judge-response parse failures
+excluded per arm): `linear_gpt` 11/23 misattributed (47.8%), `agentic_gpt`
+8/22 (36.4%) -- both higher than `linear_api`'s 25.0% and roughly
+matching `agentic_api`'s 33.3%. The two methods disagree on which model
+is "more faithful," which is the reason this project runs both rather
+than trusting numeric verification alone.
+
+Combined cost for both `holdout_v2` runs: \$63.88 (n=300 each, 0 errors
+across 600 calls) -- consistent with the pilot-derived per-case cost
+estimate two entries up.
+
+Wrote all of the above into a new Section 5.7 (cross-model replication
+check), renumbered every subsequent table (1b became Table 4, old
+Tables 2-4 shifted to 5-6 and 10-11), updated Figure 1 and its caption to
+all five arms, updated Limitations/Discussion/Conclusion to state the
+two-model scope directly, and recompiled the PDF. Not yet committed as
+of this entry -- see git status.
