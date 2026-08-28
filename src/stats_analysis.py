@@ -205,14 +205,30 @@ def main():
         area = aurc(curve)
         low, high = ARM_BANDS[arm]
         op_h = round((high - low) / 2, 3)
-        op_point = next((c for c in curve if abs(c["half_width"] - op_h) < 1e-6), None)
+        # Computed directly against the arm's exact frozen band (not looked
+        # up from the curve's np.arange-stepped half-widths, which can be
+        # off by float epsilon from the true band edges -- e.g. 0.5-0.3 ==
+        # 0.19999999999999996, not 0.2 -- and silently miscounts any case
+        # whose probability lands exactly on a round-number band edge as
+        # "inside the band" when it should count as decided. Cases sitting
+        # exactly on 0.2/0.8-style values are common in this project
+        # precisely because of the round-number discretization Section 5.3
+        # documents, so this isn't a rare edge case here -- confirmed 19
+        # such cases for linear_retrieval alone. Keeps the reported
+        # operating point identical to evaluate_baseline.py's number, which
+        # uses this same exact-band comparison.
+        op_rc = risk_coverage(
+            data[arm]["fraud_probability"].astype(float).to_numpy(),
+            data[arm]["ground_truth_is_fraud"].to_numpy(),
+            (low, high),
+        )
         covs = [c["coverage"] for c in curve if c["accuracy"] is not None]
         accs = [c["accuracy"] for c in curve if c["accuracy"] is not None]
         plt.plot(covs, accs, marker="o", markersize=3, label=arm)
-        if op_point:
-            plt.scatter([op_point["coverage"]], [op_point["accuracy"]], s=120, edgecolor="black", zorder=5)
+        if op_rc["accuracy"] is not None:
+            plt.scatter([op_rc["coverage"]], [op_rc["accuracy"]], s=120, edgecolor="black", zorder=5)
             report_lines.append(
-                f"| {arm} | {area:.4f} | {op_h} | {op_point['coverage']:.3f} | {op_point['accuracy']:.3f} |"
+                f"| {arm} | {area:.4f} | {op_h} | {op_rc['coverage']:.3f} | {op_rc['accuracy']:.3f} |"
             )
 
     plt.xlabel("Coverage (fraction of cases decided)")
