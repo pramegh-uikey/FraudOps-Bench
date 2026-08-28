@@ -21,6 +21,9 @@ KEY_COMPARISONS = [
     ("linear_api", "linear_gpt"),
     ("agentic_api", "agentic_gpt"),
     ("linear_gpt", "agentic_gpt"),
+    ("linear_api", "linear_retrieval"),
+    ("agentic_api", "agentic_retrieval"),
+    ("linear_retrieval", "agentic_retrieval"),
 ]
 
 WORKFLOW_COLS = [

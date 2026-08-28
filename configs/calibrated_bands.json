@@ -73,5 +73,35 @@
       "total_decided": 12,
       "methodology_version": "v2_lcb_fixed_calibrate_band"
     }
+  },
+  "linear_retrieval": {
+    "band": [
+      0.2,
+      0.8
+    ],
+    "frozen_at": "2026-08-28T20:18:05.846513+00:00",
+    "metadata": {
+      "calibration_n": 118,
+      "target_risk": 0.15,
+      "lcb_cv_accuracy": 0.9026498319920891,
+      "mean_cv_accuracy": 0.9418181818181818,
+      "total_decided": 43,
+      "methodology_version": "v2_lcb_fixed_calibrate_band"
+    }
+  },
+  "agentic_retrieval": {
+    "band": [
+      0.35,
+      0.65
+    ],
+    "frozen_at": "2026-08-28T20:18:06.778771+00:00",
+    "metadata": {
+      "calibration_n": 120,
+      "target_risk": 0.15,
+      "lcb_cv_accuracy": 0.8954567534981444,
+      "mean_cv_accuracy": 0.9328781512605042,
+      "total_decided": 71,
+      "methodology_version": "v2_lcb_fixed_calibrate_band"
+    }
   }
 }

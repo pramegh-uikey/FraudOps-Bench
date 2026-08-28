@@ -11,7 +11,7 @@ from faithfulness import (
 )
 from splits import arm_output_path
 
-SUPPORTED_ARMS = ["linear_api", "agentic_api", "linear_gpt", "agentic_gpt"]
+SUPPORTED_ARMS = ["linear_api", "agentic_api", "linear_gpt", "agentic_gpt", "linear_retrieval", "agentic_retrieval"]
 
 
 def main():
@@ -23,7 +23,7 @@ def main():
     parsed_path = arm_output_path(args.split, args.arm, suffix="_parsed.jsonl")
     parsed_rows = load_jsonl(parsed_path)
 
-    if args.arm in ("linear_api", "linear_gpt"):
+    if args.arm in ("linear_api", "linear_gpt", "linear_retrieval"):
         evidence_by_case = load_linear_evidence_by_case(args.split)
         tools_called_by_case = {}
     else:

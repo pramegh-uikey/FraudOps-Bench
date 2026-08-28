@@ -31,6 +31,17 @@ ARM_BANDS = {
     # cases in calibration -- a genuinely wide, low-confidence band, not
     # tuned to look this way. See docs/methodology_log.md, 2026-08-27 entry.
     "agentic_gpt": (0.1, 0.9),
+    # Calibrated 2026-08-29 via src/calibrate_arm.py (n=120 calibration
+    # split, same LCB methodology, own from-scratch calibration -- never
+    # seeded from linear_api/agentic_api's frozen bands). Both cleared the
+    # LCB target organically, no fallback needed. Notably,
+    # agentic_retrieval's band is narrower than agentic_api's own (0.25,
+    # 0.75) despite clearing the same accuracy bar -- 71/120 decided in
+    # calibration (59%) vs agentic_api's much thinner calibration coverage,
+    # early evidence retrieval grounding may be reducing the probability
+    # discretization diagnosed in Section 5.3. See docs/methodology_log.md.
+    "linear_retrieval": (0.2, 0.8),
+    "agentic_retrieval": (0.35, 0.65),
 }
 
 
@@ -128,7 +139,8 @@ def main():
     parser.add_argument("--split", default="holdout_v2")
     args = parser.parse_args()
 
-    arms = ["linear_api", "agentic_api", "classical_ml", "linear_gpt", "agentic_gpt"]
+    arms = ["linear_api", "agentic_api", "classical_ml", "linear_gpt", "agentic_gpt",
+            "linear_retrieval", "agentic_retrieval"]
     data = {arm: load_probs(args.split, arm) for arm in arms}
 
     report_lines = [f"# Statistical analysis -- {args.split}\n"]
@@ -156,6 +168,8 @@ def main():
     pairs = [
         ("linear_api", "agentic_api"), ("linear_api", "classical_ml"), ("agentic_api", "classical_ml"),
         ("linear_api", "linear_gpt"), ("agentic_api", "agentic_gpt"), ("linear_gpt", "agentic_gpt"),
+        ("linear_api", "linear_retrieval"), ("agentic_api", "agentic_retrieval"),
+        ("linear_retrieval", "agentic_retrieval"),
     ]
     for arm_a, arm_b in pairs:
         merged = data[arm_a][["case_id", "ground_truth_is_fraud", "predicted_is_fraud"]].merge(
