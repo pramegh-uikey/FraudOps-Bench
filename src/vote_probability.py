@@ -119,6 +119,40 @@ Respond with exactly one word, nothing else: FRAUD or NOT_FRAUD.
 """
 
 
+def _make_vote_prompt_scaffolded(packet: dict, sop_text: str) -> str:
+    """Control condition: isolates continuous-number-output vs.
+    binary-word-output as the only variable, by keeping the verbalized
+    prompt's six-required-check reasoning scaffold intact and changing
+    only the final answer format. Resolves the confound in the plain
+    vote prompt above (which also dropped that reasoning step)."""
+    packet_for_agent = strip_hidden_field(packet)
+    return f"""
+You are a fraud analyst reviewing a card-not-present transaction alert.
+
+Follow the SOP strictly.
+
+SOP:
+{sop_text}
+
+CASE WITH TOOL EVIDENCE:
+{json.dumps(packet_for_agent, indent=2)}
+
+Important rules:
+- You have been provided outputs from all available investigation tools.
+- Use the tool evidence to complete the required checks.
+- Do not mention or infer access to the hidden fraud label.
+- Address all 6 required checks first (transaction_amount_check,
+  card_history_check, email_domain_check, device_history_check,
+  velocity_check, identity_consistency_check), briefly noting for each
+  whether it is protective, risk, or neutral. Weigh convergence of
+  multiple independent signals, not just whether any single risk
+  indicator is present.
+
+After working through all 6 checks, end your response with a final line
+containing exactly one word and nothing else: FRAUD or NOT_FRAUD.
+"""
+
+
 def _parse_verbalized_probability(raw_text: str | None) -> float | None:
     if raw_text is None:
         return None
@@ -131,9 +165,27 @@ def _parse_verbalized_probability(raw_text: str | None) -> float | None:
 
 
 def _parse_vote(raw_text: str | None) -> str | None:
-    """NOT_FRAUD contains FRAUD as a substring -- must check it first."""
+    """NOT_FRAUD contains FRAUD as a substring -- must check it first.
+
+    For the scaffolded control prompt, the response contains reasoning
+    prose that will very likely mention "fraud" while discussing risk
+    indicators regardless of the final verdict -- a whole-text substring
+    scan would false-positive on that. Check the last few non-empty
+    lines first (where the final verdict actually lives); only fall back
+    to a whole-text scan if that fails, since the plain (non-scaffolded)
+    vote prompt's one-word response has no such reasoning body to
+    confuse it in the first place."""
     if raw_text is None:
         return None
+
+    lines = [line.strip() for line in raw_text.strip().splitlines() if line.strip()]
+    for line in reversed(lines[-3:]):
+        upper = line.upper()
+        if "NOT_FRAUD" in upper or "NOT FRAUD" in upper:
+            return "NOT_FRAUD"
+        if "FRAUD" in upper:
+            return "FRAUD"
+
     text = raw_text.strip().upper()
     if "NOT_FRAUD" in text or "NOT FRAUD" in text:
         return "NOT_FRAUD"
@@ -147,25 +199,36 @@ def load_jsonl(path: Path) -> list[dict]:
         return [json.loads(line) for line in f]
 
 
-def run_one_case(packet: dict, sop_text: str, n_votes: int) -> dict:
+def run_one_case(packet: dict, sop_text: str, n_votes: int, scaffolded: bool = False,
+                  skip_verbalized: bool = False) -> dict:
     case_id = packet["case_id"]
     ground_truth = packet["ground_truth_is_fraud"]
 
     total_cost = 0.0
     total_latency_ms = 0.0
 
-    verbalized_prompt = _make_verbalized_prompt(packet, sop_text)
-    r = call_llm("anthropic", "claude-sonnet-5", verbalized_prompt, max_tokens=VERBALIZED_MAX_TOKENS)
-    total_cost += r.cost_usd or 0.0
-    total_latency_ms += r.latency_ms
-    verbalized_probability = _parse_verbalized_probability(r.raw_text)
-    verbalized_error = r.error
+    verbalized_probability = None
+    verbalized_error = None
+    if not skip_verbalized:
+        # Control run reuses the first run's already-collected verbalized
+        # baseline (outputs/vote_probability_dev.jsonl) rather than paying
+        # for it twice -- see analyze_vote_probability.py / the merge step.
+        verbalized_prompt = _make_verbalized_prompt(packet, sop_text)
+        r = call_llm("anthropic", "claude-sonnet-5", verbalized_prompt, max_tokens=VERBALIZED_MAX_TOKENS)
+        total_cost += r.cost_usd or 0.0
+        total_latency_ms += r.latency_ms
+        verbalized_probability = _parse_verbalized_probability(r.raw_text)
+        verbalized_error = r.error
 
-    vote_prompt = _make_vote_prompt(packet, sop_text)
+    vote_prompt = (
+        _make_vote_prompt_scaffolded(packet, sop_text) if scaffolded
+        else _make_vote_prompt(packet, sop_text)
+    )
+    vote_max_tokens = VERBALIZED_MAX_TOKENS if scaffolded else VOTE_MAX_TOKENS
     votes = []
     vote_errors = 0
     for _ in range(n_votes):
-        r = call_llm("anthropic", "claude-sonnet-5", vote_prompt, max_tokens=VOTE_MAX_TOKENS)
+        r = call_llm("anthropic", "claude-sonnet-5", vote_prompt, max_tokens=vote_max_tokens)
         total_cost += r.cost_usd or 0.0
         total_latency_ms += r.latency_ms
         parsed_vote = _parse_vote(r.raw_text)
@@ -198,6 +261,13 @@ def main():
     parser.add_argument("--n-votes", type=int, default=N_VOTES)
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--output", default=None)
+    parser.add_argument("--scaffolded", action="store_true",
+                         help="control run: keep the six-required-check reasoning scaffold in the vote "
+                              "prompt (matching the verbalized prompt's reasoning depth), changing only "
+                              "the final answer format. Resolves the confound in the plain vote run.")
+    parser.add_argument("--skip-verbalized", action="store_true",
+                         help="skip the verbalized-baseline call (reuse the already-collected data from "
+                              "the first, non-scaffolded run instead of paying for it twice)")
     args = parser.parse_args()
 
     packets = load_jsonl(evidence_path("dev"))
@@ -205,11 +275,14 @@ def main():
         packets = packets[: args.limit]
 
     sop_text = SOP_PATH.read_text()
-    output_path = Path(args.output) if args.output else PROJECT_ROOT / "outputs" / "vote_probability_dev.jsonl"
+    default_name = "vote_probability_dev_scaffolded.jsonl" if args.scaffolded else "vote_probability_dev.jsonl"
+    output_path = Path(args.output) if args.output else PROJECT_ROOT / "outputs" / default_name
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"Running {len(packets)} dev cases, {args.n_votes} votes each "
-          f"({len(packets) * (1 + args.n_votes)} total API calls), concurrency={args.concurrency}")
+    n_calls_per_case = args.n_votes + (0 if args.skip_verbalized else 1)
+    print(f"Running {len(packets)} dev cases, {args.n_votes} votes each, scaffolded={args.scaffolded}, "
+          f"skip_verbalized={args.skip_verbalized} "
+          f"({len(packets) * n_calls_per_case} total API calls), concurrency={args.concurrency}")
 
     write_lock = threading.Lock()
     total_cost = 0.0
@@ -225,7 +298,8 @@ def main():
 
         with ThreadPoolExecutor(max_workers=args.concurrency) as pool:
             futures = {
-                pool.submit(run_one_case, packet, sop_text, args.n_votes): packet
+                pool.submit(run_one_case, packet, sop_text, args.n_votes,
+                            args.scaffolded, args.skip_verbalized): packet
                 for packet in packets
             }
             done = 0
