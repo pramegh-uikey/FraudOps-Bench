@@ -11,6 +11,19 @@
 \usepackage{float}
 \usepackage{tabularx}
 \usepackage{booktabs}
+
+%% ieeeaccess.cls redefines the TeX primitive \year as a one-argument
+%% command (\year{2026}, setting the footer year), but pgf/tikz's core
+%% math library reads the *primitive* \year as a plain integer to seed
+%% its random-number generator the instant it loads -- unconditionally,
+%% even if no random feature is ever used. Shadow \year with a plain
+%% number only while tikz loads, then restore the class's version so
+%% \year{2026} below still works as intended.
+\let\IEEEaccessYearCmd\year
+\def\year{2026}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+\let\year\IEEEaccessYearCmd
 \usepackage[unicode=true]{hyperref}
 \usepackage{url}
 \renewcommand{\arraystretch}{1.25}
@@ -284,6 +297,33 @@ alongside AutoGen \cite{autogen2023} and CrewAI \cite{crewai2023}; none of
 these frameworks target fraud operations specifically, and none ship an
 evaluation protocol beyond their own tool-calling correctness.
 
+\textbf{LLM confidence calibration and selective prediction.} Selective
+prediction -- reject the input rather than force a decision when
+confidence is low -- goes back to Chow's rule \cite{chow1970} and was
+extended to deep networks by Geifman and El-Yaniv's selective
+classification framework \cite{geifman2017}, both of which implicitly
+assume a well-behaved, continuous confidence signal. Whether LLM-elicited
+confidence scores meet that assumption is itself an active question:
+Tian et al. \cite{tian2023} show that prompting a reinforcement-learning-
+from-human-feedback (RLHF)-tuned model to verbalize a probability can be
+better calibrated than its token-level likelihood, but Xiong et al.'s
+systematic evaluation \cite{xiong2024} finds elicited confidence remains
+frequently overconfident and unstable across prompting strategies. Most
+directly relevant to Section 5.3's root-cause finding, Dai and Wang
+\cite{dai2026} report that verbalized LLM confidence concentrates on a
+small number of round-number values across six models and three
+datasets -- independent confirmation that the discretization this paper
+diagnoses in \code{agentic_api}'s outputs is a general property of LLM
+confidence elicitation, not an artifact specific to this benchmark or
+model. Conformal prediction \cite{campos2024} offers an alternative,
+distribution-free route to calibrated uncertainty for LLM outputs, but
+typically targets prediction \textit{sets} over a fixed label space
+rather than the single scalar probability this benchmark's SOP requires
+the model to commit to as part of an auditable disposition; we adopt the
+lower-confidence-bound-based fix (Section 5.4) as the more direct match
+to that constraint, not as a claim that it dominates conformal
+alternatives in general.
+
 \textbf{Adjacent public fraud datasets.} BAF \cite{baf2022} and AMLworld
 \cite{amlworld2023} are the strongest synthetic-from-real alternatives to
 IEEE-CIS for future extensions of this benchmark -- BAF in particular
@@ -355,6 +395,48 @@ cross-model replication check on the calibration methodology and the
 practical-performance finding. The local-model variants
 (\code{linear_local}/\code{agentic_local}, built but not run -- see
 Limitations) remain out of scope for this report.
+
+\begin{figure*}[!t]
+\centering
+\begin{tikzpicture}[
+  every node/.style={font=\footnotesize},
+  proc/.style={draw, rounded corners, align=center, minimum width=2.1cm,
+    minimum height=0.95cm, fill=black!4},
+  gate/.style={proc, fill=black!12},
+  term/.style={proc, fill=black!22},
+  arr/.style={-{Latex[length=2.2mm]}, thick},
+  lbl/.style={font=\scriptsize, align=center}
+]
+\node[term] (alert) at (0,0) {Alert\\summary};
+\node[proc] (brain) at (3,0) {Brain\\(LLM)};
+\node[proc] (orch) at (6,0) {Orchestrator};
+\node[gate] (sup) at (9,0) {Supervisor};
+\node[term] (disp) at (12,0) {Disposition\\+ cited evidence};
+\node[proc] (tools) at (4.5,-2.3) {Tool nodes\\(6 tools)};
+\node[proc] (mem) at (7.5,-2.3) {Memory\\(check verdicts)};
+
+\draw[arr] (alert) -- (brain);
+\draw[arr] (brain) -- (orch);
+\draw[arr] (orch.south) -- (tools.north);
+\draw[arr] (tools) -- (mem);
+\draw[arr] (mem.north) .. controls (7.5,0.9) and (4.5,0.9) .. (brain.south east)
+  node[lbl, pos=0.5, above] {next tool call, or finalize};
+\draw[arr] (orch) -- (sup) node[lbl, midway, above] {brain signals done};
+\draw[arr] (sup) -- (disp) node[lbl, midway, above] {required checks\\complete};
+\draw[arr] (sup.south) .. controls (9,-1.6) and (6,-1.6) .. (orch.south)
+  node[lbl, pos=0.5, below] {incomplete: back to orchestrator};
+\end{tikzpicture}\\[4pt]
+\parbox{0.9\textwidth}{\textbf{FIGURE 1.} \code{agentic_api}'s LangGraph
+architecture (Table 1). The brain (LLM) and orchestrator iteratively
+select among six tools, writing structured verdicts to memory each
+round, until the brain signals it is ready to finalize; the supervisor
+node then checks that all six required checks were actually completed
+before allowing a disposition, routing back to the orchestrator rather
+than allowing an under-evidenced finalization if not. \code{linear_api}
+takes the single-shot path (alert directly to brain with all six tools'
+output pre-attached, no orchestrator loop); \code{direct_control} sees
+only the alert box.}
+\end{figure*}
 
 \subsection*{3.3 Selective prediction and the SOP}
 
@@ -515,7 +597,7 @@ and run under the corrected, re-frozen methodology.
 \begin{table}[H]
 \centering
 \textbf{TABLE 3. \code{holdout_v2} results (n=300).}\\[2pt]
-\footnotesize
+\scriptsize
 \begin{tabularx}{\columnwidth}{@{}lYYYYYYY@{}}
 \toprule
 \textbf{Arm} & \textbf{Band} & \textbf{Cov.} & \textbf{Acc.} &
@@ -539,7 +621,7 @@ point, which is the correct primary comparison but obscures how each arm
 performs off that point. Since disposition is a deterministic function of
 \code{fraud_probability} and the band, every arm's accuracy/coverage at
 \textit{any} band is a free re-computation on the already-collected
-\code{holdout_v2} probabilities (Section 5.5's Fig. 1 curve) -- no new
+\code{holdout_v2} probabilities (Section 5.5's Fig. 2 curve) -- no new
 API calls. Shown here for all three arms at the three bands discussed in
 this paper: the original overfit band, the common band
 \code{linear_api}/\code{classical_ml} were independently selected at, and
@@ -570,7 +652,7 @@ arm's own selected operating point (the one reported in Table 3) is
   95.3\% of the queue at 88.8\% accuracy -- both other arms are 20+
   points less accurate at that same near-total coverage (0.752, 0.759).
   This is the source of its risk-coverage-curve dominance (Section 5.5,
-  Fig. 1): it doesn't trade coverage for accuracy nearly as steeply as
+  Fig. 2): it doesn't trade coverage for accuracy nearly as steeply as
   the LLM arms do.
 \item \textbf{\code{agentic_api}'s advantage is ceiling accuracy at its
   most selective point.} At the wide (0.25, 0.75) band, it is the single
@@ -609,12 +691,12 @@ arm's own selected operating point (the one reported in Table 3) is
 \begin{figure*}[!t]
 \centering
 \includegraphics[width=0.85\textwidth]{images/risk_coverage_curves.png}\\[4pt]
-\parbox{0.85\textwidth}{\textbf{FIGURE 1.} Full risk-coverage curves per
+\parbox{0.85\textwidth}{\textbf{FIGURE 2.} Full risk-coverage curves per
 arm, all five arms
 (\code{outputs/holdout_v2/risk_coverage_curves.png}), with each Claude/
 classical-ML arm's actual reported operating point marked (Section 5.7's
 GPT arms omitted from the marked-point overlay for legibility; see Table
-8 for their operating points). \code{classical_ml}'s curve dominates
+7 for their operating points). \code{classical_ml}'s curve dominates
 every LLM arm from either model across nearly the entire coverage range,
 not merely at the specific chosen operating points -- area under the
 risk-coverage curve (AURC) 0.0343 (\code{classical_ml}) vs.\ 0.1080
@@ -696,9 +778,9 @@ particular outcome.
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 8. \code{holdout_v2} results for the GPT-5.6 Terra arms
+\textbf{TABLE 7. \code{holdout_v2} results for the GPT-5.6 Terra arms
 (n=300).}\\[2pt]
-\footnotesize
+\scriptsize
 \begin{tabularx}{\columnwidth}{@{}lYYYYYYY@{}}
 \toprule
 \textbf{Arm} & \textbf{Band} & \textbf{Cov.} & \textbf{Acc.} &
@@ -712,7 +794,7 @@ particular outcome.
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 9. Bootstrap 95\% CIs, GPT-5.6 Terra arms (10,000
+\textbf{TABLE 8. Bootstrap 95\% CIs, GPT-5.6 Terra arms (10,000
 resamples).}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lXXX@{}}
@@ -742,7 +824,7 @@ evidence the guard's caution was well-founded. \code{linear_gpt} lands at
 24.7\%-coverage cell in Table 4, but at meaningfully lower accuracy there
 (0.918 vs.\ 0.959).
 
-Read against the full risk-coverage curve (Figure 1, now showing all five
+Read against the full risk-coverage curve (Figure 2, now showing all five
 arms): \code{classical_ml} continues to dominate every LLM arm from
 either model across nearly the entire coverage range. AURC for the GPT
 arms is 0.1850 (\code{linear_gpt}) and 0.2046 (\code{agentic_gpt}) --
@@ -820,7 +902,7 @@ threshold, not a re-tune.
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 10. Self-consistency on vs.\ off,
+\textbf{TABLE 9. Self-consistency on vs.\ off,
 \code{holdout_v2} (n=300).}\\[2pt]
 \footnotesize
 \begin{tabularx}{\columnwidth}{@{}lXYY@{}}
@@ -864,7 +946,7 @@ isn't moving the accuracy needle at this operating point.
 
 \begin{table}[H]
 \centering
-\textbf{TABLE 11. Mean cost and latency per case.}\\[2pt]
+\textbf{TABLE 10. Mean cost and latency per case.}\\[2pt]
 \begin{tabularx}{\columnwidth}{@{}lYY@{}}
 \toprule
 \textbf{Arm} & \textbf{Mean cost/case} & \textbf{Mean latency/case} \\
@@ -891,7 +973,7 @@ combined ($n=300$ each, zero errors across 600 calls); their $n=120$
 calibration runs cost \$26.06 combined. \code{linear_gpt} is
 \code{linear_api}'s cheapest and fastest analogue in this study -- 2.5x
 cheaper, 3x faster -- though at lower coverage-weighted correctness
-(Table 8); \code{agentic_gpt} costs slightly more than \code{agentic_api}
+(Table 7); \code{agentic_gpt} costs slightly more than \code{agentic_api}
 per case despite a real 47\% cache-hit rate on input tokens, an
 unconfirmed cost difference worth a closer look before treating it as
 settled (\code{docs/methodology_log.md}, 2026-08-28 entry).
@@ -923,7 +1005,7 @@ single point-accuracy number is not a fair comparison between arms that
 escalate at very different rates -- \code{agentic_api} at 17\% coverage
 and \code{classical_ml} at 85\% coverage are not competing on the same
 axis, and Table 4's per-band comparison and Section 5.5's risk-coverage
-curves (Fig. 1) are the correct way to read the results:
+curves (Fig. 2) are the correct way to read the results:
 \code{classical_ml} dominates the full curve (AURC 0.0343 vs.\
 0.108--0.112), not merely the specific operating points each arm
 happened to select.
@@ -1118,7 +1200,7 @@ verified by the authors against the underlying source data
 (\code{docs/methodology_log.md}, \code{docs/error_taxonomy.md}, and
 \code{outputs/holdout_v2/}) before inclusion.
 
-\begin{thebibliography}{18}
+\begin{thebibliography}{23}
 
 \bibitem{acfe2024}
 Association of Certified Fraud Examiners, \textit{Occupational Fraud
@@ -1174,6 +1256,51 @@ use to agentic evaluation of large language models,'' in
 \textit{Proc. 42nd Int. Conf. Machine Learning (ICML)}, PMLR vol. 267,
 2025, pp. 48371--48392.
 
+\bibitem{langgraph2024}
+LangChain Inc., ``LangGraph'' [Software]. GitHub, 2024. [Online].
+Available: https://github.com/langchain-ai/langgraph
+
+\bibitem{autogen2023}
+Q. Wu \textit{et al.}, ``AutoGen: Enabling next-gen LLM applications via
+multi-agent conversation framework,'' \textit{arXiv:2308.08155}, Aug.
+2023.
+
+\bibitem{crewai2023}
+crewAI Inc., ``CrewAI'' [Software]. GitHub, 2023. [Online]. Available:
+https://github.com/crewAIInc/crewAI
+
+\bibitem{chow1970}
+C. K. Chow, ``On optimum recognition error and reject tradeoff,''
+\textit{IEEE Trans. Inf. Theory}, vol. 16, no. 1, pp. 41--46, Jan. 1970,
+doi: 10.1109/TIT.1970.1054406.
+
+\bibitem{geifman2017}
+Y. Geifman and R. El-Yaniv, ``Selective classification for deep neural
+networks,'' in \textit{Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)},
+2017, pp. 4878--4887.
+
+\bibitem{tian2023}
+K. Tian, E. Mitchell, A. Zhou, A. Sharma, R. Rafailov, H. Yao, C. Finn,
+and C. D. Manning, ``Just ask for calibration: Strategies for eliciting
+calibrated confidence scores from language models fine-tuned with human
+feedback,'' in \textit{Proc. 2023 Conf. Empirical Methods Natural Lang.
+Process. (EMNLP)}, 2023, pp. 5433--5442.
+
+\bibitem{xiong2024}
+M. Xiong, Z. Hu, X. Lu, Y. Li, J. Fu, J. He, and B. Hooi, ``Can LLMs
+express their uncertainty? An empirical evaluation of confidence
+elicitation in LLMs,'' in \textit{Proc. Int. Conf. Learning
+Representations (ICLR)}, 2024, \textit{arXiv:2306.13063}.
+
+\bibitem{dai2026}
+Y. Dai and Y. Wang, ``Rescaling confidence: What scale design reveals
+about LLM metacognition,'' \textit{arXiv:2603.09309}, Mar. 2026.
+
+\bibitem{campos2024}
+M. M. Campos, A. Farinhas, C. Zerva, M. A. T. Figueiredo, and A. F. T.
+Martins, ``Conformal prediction for natural language processing: A
+survey,'' \textit{arXiv:2405.01976}, May 2024.
+
 \bibitem{baf2022}
 S. Jesus, J. Pombal, D. Alves, A. Cruz, P. Saleiro, R. Ribeiro, J. Gama,
 and P. Bizarro, ``Turning the tables: Biased, imbalanced, dynamic
@@ -1186,28 +1313,10 @@ and K. Atasu, ``Realistic synthetic financial transactions for
 anti-money laundering models,'' in \textit{Proc. NeurIPS 2023 Datasets
 and Benchmarks Track}, \textit{arXiv:2306.16424}.
 
-\bibitem{autogen2023}
-Q. Wu \textit{et al.}, ``AutoGen: Enabling next-gen LLM applications via
-multi-agent conversation framework,'' \textit{arXiv:2308.08155}, Aug.
-2023.
-
-\bibitem{langgraph2024}
-LangChain Inc., ``LangGraph'' [Software]. GitHub, 2024. [Online].
-Available: https://github.com/langchain-ai/langgraph
-
-\bibitem{crewai2023}
-crewAI Inc., ``CrewAI'' [Software]. GitHub, 2023. [Online]. Available:
-https://github.com/crewAIInc/crewAI
-
 \bibitem{ieeecis2019}
 IEEE Computational Intelligence Society and Vesta Corporation,
 ``IEEE-CIS Fraud Detection,'' Kaggle competition, 2019. [Online].
 Available: https://www.kaggle.com/competitions/ieee-fraud-detection
-
-\bibitem{chow1970}
-C. K. Chow, ``On optimum recognition error and reject tradeoff,''
-\textit{IEEE Trans. Inf. Theory}, vol. 16, no. 1, pp. 41--46, Jan. 1970,
-doi: 10.1109/TIT.1970.1054406.
 
 \end{thebibliography}
 
