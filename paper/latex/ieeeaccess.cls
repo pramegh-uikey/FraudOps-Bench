@@ -460,7 +460,7 @@
 \newdimen\absht
 \renewenvironment{abstract}
      {\global\setbox99=\hbox\bgroup\noindent%
-      \ifjtehm\else\raisebox{-.51pc}{\includegraphics[width=0.34em]{images/bullet.png}}\hspace*{0.9mm}\fi%% modified to change image path
+      \ifjtehm\else\raisebox{-.74pc}{\includegraphics[width=0.34em]{images/bullet.png}}\hspace*{0.9mm}\fi%% modified to change image path (realigned to text cap-height, 2026-09-02)
       \begin{minipage}[t]{\abstractwidth}%
       \abstracttitle\bodyfont%
      }
@@ -474,7 +474,7 @@
 \ifdefined\IEEEkeywords\else\newenvironment{IEEEkeywords}{}{}\fi
 \renewenvironment{keywords}
      {\global\setbox88=\hbox\bgroup\noindent%
-      \ifjtehm\else\raisebox{-.51pc}{\includegraphics[width=0.34em]{images/bullet.png}}\hspace*{0.9mm}\fi%% modified to change image path
+      \ifjtehm\else\raisebox{-.74pc}{\includegraphics[width=0.34em]{images/bullet.png}}\hspace*{0.9mm}\fi%% modified to change image path (realigned to text cap-height, 2026-09-02)
       \begin{minipage}[t]{\abstractwidth}%
       \indextitle\bodyfont%
      }
@@ -484,7 +484,7 @@
      }
 \renewenvironment{IEEEkeywords}
      {\global\setbox88=\hbox\bgroup\noindent%
-      \ifjtehm\else\raisebox{-.51pc}{\includegraphics[width=0.34em]{images/bullet.png}}\hspace*{0.9mm}\fi%% modified to change image path
+      \ifjtehm\else\raisebox{-.74pc}{\includegraphics[width=0.34em]{images/bullet.png}}\hspace*{0.9mm}\fi%% modified to change image path (realigned to text cap-height, 2026-09-02)
       \begin{minipage}[t]{\abstractwidth}%
       \indextitle\bodyfont%
      }
