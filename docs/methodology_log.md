@@ -751,3 +751,97 @@ Tables 2-4 shifted to 5-6 and 10-11), updated Figure 1 and its caption to
 all five arms, updated Limitations/Discussion/Conclusion to state the
 two-model scope directly, and recompiled the PDF. Not yet committed as
 of this entry -- see git status.
+
+### 2026-09-02 -- Vote-fraction mechanism check (branch `vote-probability-check`), a genuinely messy result
+
+Note on branch context: this entry documents work on `vote-probability-
+check` (branched from `main`), which is why the entries immediately above
+(GPT-5.6 Terra, Section 5.7) are the last ones visible here rather than
+anything from `retrieval-exemplars` (a separate, still-unmerged branch,
+not reflected in `main`'s copy of this file) -- see
+`docs/future_work.md` for that branch's outcome instead.
+
+Section 5.8's retrieval-augmented exemplars (on `retrieval-exemplars`,
+paper Section 5.8) found real practical gains without confirming the
+hypothesis that motivated them: `agentic_retrieval`'s raw
+`fraud_probability` distribution stayed essentially as discretized as
+`agentic_api`'s. That leaves open whether discretization is a fixable
+verbalization artifact at all -- the premise behind a Brier-score RL
+reward design (`docs/future_work.md` item 3). This tests that directly:
+stop asking for a verbalized probability, sample the model N=10 times on
+a simple binary question instead, and see whether the resulting
+vote-fraction is less discretized than a paired verbalized baseline on
+the same cases.
+
+**Design, deliberately scoped down from a full new arm:** standalone
+script (`src/vote_probability.py`), not wired into `run_baseline.py`'s
+arm system -- no `configs/models.yaml` entry, no calibration, no holdout
+claim. Run on the `dev` split (n=50) specifically because it is the
+split explicitly documented as free to use for exploratory work, never
+reported as a final number -- using `calibration` or `holdout_v2` for a
+diagnostic like this would raise exactly the holdout-hygiene question
+this project is built around avoiding, for no benefit. Linear flow only
+(single-shot, evidence pre-attached), not agentic -- agentic's multi-turn
+loop would need to run in full for every one of the N votes, multiplying
+`agentic_api`'s own per-case cost by N with no way to cheapen the
+intermediate turns.
+
+**First run (plain vote, no reasoning scaffold), n=50, N=10 (550 calls,
+$19.96, 0 errors):** paired against a freshly-run verbalized baseline on
+the identical 50 cases (`linear_api`-style prompt, never run on `dev`
+before). Result was the opposite of the hypothesis, and not subtly:
+vote-fraction collapsed to 4 unique values across 50 cases (top-3
+concentration 98.0%, 96% landing at exactly 0.0 or 1.0) versus the
+verbalized baseline's 24 unique values (top-3 32.7%, 0% at the
+extremes). Repeated independent sampling on a simple yes/no question
+converges to near-total certainty on almost every case rather than
+showing graded uncertainty.
+
+**Confound identified before trusting that result:** the vote prompt
+dropped the verbalized prompt's requirement to work through all 6
+required checks before answering -- so "voting" and "skipped reasoning"
+were conflated. Built a control condition
+(`_make_vote_prompt_scaffolded`) restoring that reasoning requirement,
+changing only the final answer format (one word instead of a JSON
+probability), plus a smarter parser (`_parse_vote` now checks the last
+3 non-empty lines first, falling back to a whole-text scan) -- necessary
+because reasoning prose will legitimately mention "fraud" while
+discussing risk indicators regardless of the actual final verdict, which
+a naive whole-text substring scan would false-positive on.
+
+**Control run, n=50, N=10, `--skip-verbalized` (reused the first run's
+baseline rather than paying for it twice), $45.65, 0 errors:** genuinely
+more graded than the plain vote (9 unique values, 74.0% top-3, 64% at
+the extremes) -- confirming the missing-reasoning confound was real and
+substantial. But manual inspection of raw responses (not saved to the
+output file -- had to re-run several cases live to check) revealed a
+deeper problem: the model largely ignores the "answer with one word
+only" instruction and reverts to its full trained JSON response, then
+appends a final word afterward. That word is sometimes consistent with
+its own internal `fraud_probability`/`disposition` and sometimes not --
+one case (`CASE_0009`, ground truth not-fraud) had an internal
+`fraud_probability: 0.5, disposition: ESCALATE` (genuinely mixed
+evidence, by its own assessment) but appended a flat "FRAUD" as the
+final word, with all 10 votes unanimous. Scaffolded-vote accuracy at a
+naive 0.5 threshold (31/50, 62%) came in *below* both the verbalized
+baseline (35/49, 71%) and even the plain vote (38/50, 76%) -- plausibly
+explained by this inconsistency between the model's real internal
+judgment and an inconsistently-appended label, though this is not
+independently confirmed.
+
+**Net finding, reported as genuinely complicated rather than forced into
+either the original hypothesis or a tidier story:** the missing-
+reasoning confound was real (scaffolding meaningfully changes the
+distribution), but even controlling for it, voting is still far more
+bimodal than verbalized probability, and the measurement itself is
+messier than the experiment design assumed -- the model does not cleanly
+separate "structured reasoning" from "final answer format" the way the
+scaffolded prompt asked it to. This is a genuine complication for the
+RL reward design in `docs/future_work.md` item 3, beyond the
+discretization question alone: getting the model to reliably produce an
+independent, format-constrained final judgment is itself harder than
+assumed, not just the underlying calibration question.
+
+Total cost across both runs plus ~4 live verification spot-checks
+(re-running specific cases to inspect raw text, since the pipeline only
+saves parsed votes, not raw responses): approximately \$69.
