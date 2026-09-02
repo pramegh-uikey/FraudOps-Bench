@@ -419,7 +419,7 @@ Limitations) remain out of scope for this report.
 \draw[arr] (brain) -- (orch);
 \draw[arr] (orch.south) -- (tools.north);
 \draw[arr] (tools) -- (mem);
-\draw[arr] (mem.north) .. controls (7.5,0.9) and (4.5,0.9) .. (brain.south east)
+\draw[arr] (mem.north) .. controls (7.5,0.9) and (4.05,0.9) .. (brain.east)
   node[lbl, pos=0.5, above] {next tool call, or finalize};
 \draw[arr] (orch) -- (sup) node[lbl, midway, above] {brain signals done};
 \draw[arr] (sup) -- (disp) node[lbl, midway, above] {required checks\\complete};
