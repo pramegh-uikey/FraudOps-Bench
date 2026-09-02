@@ -410,8 +410,8 @@ Limitations) remain out of scope for this report.
 \node[term] (alert) at (0,0) {Alert\\summary};
 \node[proc] (brain) at (3,0) {Brain\\(LLM)};
 \node[proc] (orch) at (6,0) {Orchestrator};
-\node[gate] (sup) at (9,0) {Supervisor};
-\node[term] (disp) at (12,0) {Disposition\\+ cited evidence};
+\node[gate] (sup) at (9.7,0) {Supervisor};
+\node[term] (disp) at (13.4,0) {Disposition\\+ cited evidence};
 \node[proc] (tools) at (4.5,-2.3) {Tool nodes\\(6 tools)};
 \node[proc] (mem) at (7.5,-2.3) {Memory\\(check verdicts)};
 
@@ -421,8 +421,8 @@ Limitations) remain out of scope for this report.
 \draw[arr] (tools) -- (mem);
 \draw[arr] (mem.north) .. controls (7.5,0.9) and (4.05,0.9) .. (brain.east)
   node[lbl, pos=0.5, above] {next tool call, or finalize};
-\draw[arr] (orch) -- (sup) node[lbl, midway, above] {brain signals done};
-\draw[arr] (sup) -- (disp) node[lbl, midway, above] {required checks\\complete};
+\draw[arr] (orch) -- (sup) node[lbl, midway, above] {brain done};
+\draw[arr] (sup) -- (disp) node[lbl, midway, above] {complete};
 \draw[arr] (sup.south) .. controls (9,-1.6) and (6,-1.6) .. (orch.south)
   node[lbl, pos=0.5, below] {incomplete: back to orchestrator};
 \end{tikzpicture}\\[4pt]
