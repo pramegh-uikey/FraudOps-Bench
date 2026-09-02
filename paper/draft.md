@@ -1,4 +1,4 @@
-# FraudOps-Bench: Process-Level, Tool-Grounded Evaluation of LLM Agents for Card-Not-Present Fraud Investigation, and a Calibration Failure Mode Worth Knowing About
+# FraudOps-Bench: Process-Level, Tool-Grounded Evaluation of LLM Agents for Card-Not-Present Fraud Investigation, and a Calibration Pitfall in Selective Prediction with LLM Confidence Scores
 
 **Status: DRAFT.** Every number in this document is traceable to a file
 under `outputs/` or `docs/methodology_log.md` in this repository. No
