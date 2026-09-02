@@ -2,12 +2,14 @@
 
 Deliberately deferred ideas for after the IEEE Access submission
 (`paper/latex/fraudops_bench.tex`) is submitted and accepted -- explicit
-user instruction, 2026-08-20 (reaffirmed 2026-08-28). Do not start any of
-the still-open items below before then. All of them target the same
-root cause: Section 5.3's finding that `agentic_api`'s
-`fraud_probability` outputs are discretized (cluster on round,
-prompt-anchored values) rather than continuous, which is what breaks
-small-sample threshold calibration in the first place.
+user instruction, 2026-08-20 (reaffirmed 2026-08-28). Do not start item
+3 (still open) before then. All of them target the same root cause:
+Section 5.3's finding that `agentic_api`'s `fraud_probability` outputs
+are discretized (cluster on round, prompt-anchored values) rather than
+continuous, which is what breaks small-sample threshold calibration in
+the first place. Items 1 and 2 were both run as submission-timeline
+exceptions (racing the deadline, `main` kept as the untouched fallback)
+-- see each item for its branch and outcome.
 
 ## 1. Retrieval-augmented exemplars -- DONE (2026-08-29), result mixed
 
@@ -56,46 +58,68 @@ only, no agent, no selective prediction). This imported their retrieval
 approach into FraudOps-Bench's agentic/selective-prediction framework,
 which neither paper had tested.
 
-## 2. Sampling-based continuous probability (bypass verbalization entirely)
+## 2. Sampling-based continuous probability -- DONE (2026-09-02), result genuinely messy
 
-**Idea, motivated directly by item 1's actual result:** stop asking the
-model to *verbalize* a single `fraud_probability` number at all --
-that's the step that anchors it to round, prompt-shaped values in the
-first place. Instead, sample the model N times (e.g. N=10) at
-temperature > 0 on a simpler binary question ("fraud or not?"), and use
-the vote fraction as the probability estimate. A fraction like 7/10 is
-naturally continuous at 1/N granularity and never passes through a
-verbalization step that could anchor on a round number.
+Built and run on the `vote-probability-check` branch (not merged into
+`main`, same submission-timeline call as item 1). See
+`docs/methodology_log.md`'s 2026-09-02 entry for the full numbers and
+narrative; summarized here.
 
-**Why this is the right next experiment, not RL:** item 1 showed that
-grounding the model in better context (retrieval) improves outcomes
-*without* fixing discretization -- so the discretization problem itself
-is still open, and it's still unclear whether it's fixable at all short
-of retraining. This test answers that directly and cheaply: no
-training, no reward-hacking risk, just more inference calls per case.
-If vote-fraction probabilities show measurably less round-number
-clustering than verbalized ones, that's real evidence the problem is a
-verbalization artifact (and that a Brier-score RL reward, item 3 below,
-is targeting a sound mechanism). If they don't, that's evidence the
-clustering runs deeper than how confidence gets phrased, and item 3's
-premise needs rethinking before spending real time/money on it.
+**What was tried:** stop asking the model to *verbalize* a single
+`fraud_probability` number and instead sample it N=10 times on a simple
+binary question ("fraud or not?"), using the vote fraction as the
+probability -- naturally continuous at 1/N granularity, no verbalization
+step to anchor on a round number. Run on `linear_api`'s single-shot
+flow, `dev` split (n=50), paired against a freshly-run verbalized
+baseline on the identical 50 cases.
 
-**Cost/effort:** cheap. No new arm-calibration cycle needed to get a
-first read -- run N-sample voting on a modest sample of already-scored
-holdout cases and compare the resulting probability histogram's
-round-number concentration against the existing verbalized-probability
-baselines already on file (`outputs/holdout_v2/agentic_api_parsed.jsonl`
-etc.). A day or two, not a week.
+**What actually happened:** the opposite of the hypothesis, and not
+subtly. Plain vote-fraction (no reasoning step before answering)
+collapsed to 4 unique values across 50 cases (98.0% top-3 concentration,
+96% landing at exactly 0.0 or 1.0) versus the verbalized baseline's 24
+unique values (32.7% top-3, 0% at the extremes). A confound was
+identified and tested directly: the vote prompt had dropped the
+verbalized prompt's six-required-check reasoning step. A control run
+restoring that reasoning (changing only the final answer format) showed
+a real, substantial effect -- 9 unique values, 74.0% top-3 -- confirming
+the missing reasoning mattered. But even controlling for it, voting
+remained far more bimodal than verbalized probability (64% still at the
+exact extremes), and manual inspection of raw responses revealed the
+measurement itself is messier than assumed: the model mostly ignores
+"answer one word only" and reverts to its full trained JSON response,
+appending a final word that is sometimes inconsistent with its own
+internal `fraud_probability`/`disposition` (one case: internal 0.5/
+ESCALATE, appended word a flat "FRAUD"). Scaffolded-vote accuracy (62%)
+came in below both the verbalized baseline (71%) and even the plain
+vote (76%).
+
+**What this means for item 3 (RL):** not encouraging, and not a clean
+answer either way. Voting does not turn out to be a cheap fix for
+discretization -- if anything it's a different, more extreme
+discretization failure mode (near-total bimodal certainty rather than
+graded uncertainty). Worse, getting the model to reliably separate
+"structured reasoning" from "constrained final answer format" is itself
+harder than the experiment design assumed, which is a genuine
+complication for any RL reward built on "the model can express
+fine-grained confidence if only asked correctly" -- that premise looks
+shakier after this result, not more solid. Total cost: ~$69 across both
+runs plus verification spot-checks.
 
 ## 3. Reinforcement learning on the calibration signal
 
-**Sequencing: do item 2 first.** This reward design's whole premise --
-that discretization is a fixable verbalization artifact -- is exactly
-what item 2 is designed to test cheaply, without training anything. Item
-1's actual result already showed one intervention (retrieval) improving
-outcomes without fixing discretization; don't commit RL budget to a
-Brier-score reward until item 2 gives a reason to believe fixing
-discretization is possible at all.
+**Sequencing note, updated now that item 2 is done:** the calibration
+reward design below rests on the premise that discretization is a
+fixable verbalization artifact, addressable by rewarding genuinely
+differentiated probabilities. Item 2's result is a real caution against
+that premise, not confirmation of it -- the model's repeated independent
+judgments collapsed toward binary certainty rather than showing the
+graded uncertainty a Brier-score reward would need to shape, and the
+model didn't even reliably separate reasoning from final-answer format
+when asked to. This doesn't rule RL out, but it means going in without
+illusions: this may be fighting the model's actual judgment structure,
+not a superficial habit. If pursued, start with a small-scale pilot
+specifically testing whether the reward can move the needle at all
+before committing to a full training run.
 
 **Idea:** instead of prompting a frozen pretrained model, let it learn
 from a reward signal computed against real fraud/not-fraud labels.
