@@ -24,14 +24,6 @@ anything I can finish unilaterally.
   changed in the fix round: verifying current publication venues needs
   a literature check I can't do offline, and guessing a venue is worse
   than citing the preprint honestly.
-- [ ] **Author photos.** Both `IEEEbiography` entries
-  (`paper/latex/fraudops_bench.tex`, ~line 1331 and ~line 1341) currently
-  use `[\mbox{}]` as a placeholder for the optional photo argument (no
-  photographs were available when the biographies were written). Once
-  you have headshots: drop the image files in `paper/latex/images/`,
-  replace each `[\mbox{}]` with
-  `[\includegraphics[width=1in,height=1.25in]{images/<file>}]`, and
-  recompile to confirm sizing/cropping looks right.
 - [ ] **ORCID iDs, both authors.** IEEE's own Submission Checklist item 4
   only strictly requires the *corresponding* author's (Ayushi's) ORCID
   in the submission portal -- the TODO comment in the `.tex`
@@ -110,6 +102,27 @@ figures. Changes made:
   several model calls per case); consistent `$n$` styling in captions;
   `\texorpdfstring` on three subsection titles, clearing all six
   hyperref PDF-bookmark warnings.
+
+### Author photos added (2026-09-20)
+
+Both `IEEEbiography` entries now carry headshots supplied by the
+authors, replacing the `[\mbox{}]` placeholders:
+`images/ayushi_ambilkar.png` and `images/pramegh_uikey.png`, included at
+`width=1in,height=1.25in,clip,keepaspectratio`.
+
+Each source image was cropped to IEEE's 4:5 biography box rather than
+letterboxed, trimming the dead headroom above the subject (both
+originals were taller than 4:5, so a straight fit would have left white
+gaps and inconsistent head sizes between the two). Ayushi's also needed
+a light 60px side trim to bring its headroom in line with Pramegh's;
+the result is 6.4% and 7.7% headroom respectively, so the two read as a
+matched pair. Both were then resampled to 600x750 px -- exactly 600 dpi
+at the printed size, twice IEEE's 300 dpi floor. The unmodified
+originals are still in `~/Downloads`; re-crop from those if you want
+different framing.
+
+This takes the PDF from 172 KB to 1.2 MB, which is immaterial for the
+portal's limits.
 
 ### Supplementary material rebuilt
 
