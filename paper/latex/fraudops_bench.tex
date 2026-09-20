@@ -380,7 +380,7 @@ The consequence is that this benchmark measures \textit{discrimination
 under a balanced queue}, not calibration to an operational base rate.
 Precision, coverage-weighted correctness, and the risk-coverage curves
 in Section~\ref{sec:calib} would all shift---precision most
-sharply---if the same arms were run against a queue at the 3.5\%
+sharply---if the same arms were run against a queue at the 3.50\%
 prevalence of the raw dataset, and no result here should be read as a
 deployment-realistic false-positive estimate
 (Section~\ref{sec:limits}). The comparison \textit{between} arms is
@@ -581,7 +581,7 @@ against the real tool-evidence values (including a percentage-form match
 for fractional fields). Zero additional API cost. Across dev,
 calibration, holdout, and holdout\_v2, both LLM arms show 98.7--99.3\%
 verified rates. Residual ``unverified'' claims are overwhelmingly the
-model correctly performing arithmetic (e.g.\ a time delta between two
+model correctly performing arithmetic (e.g., a time delta between two
 timestamps) that the ground-truth flattener does not itself compute---not fabrication (manually verified, see \code{docs/methodology_log.md}).
 
 \textbf{Method 2---LLM-judge semantic check.} A judge based on Claude
@@ -681,7 +681,7 @@ standard errors across folds) clears the threshold, and
 additionally requiring a minimum total decided-case count across folds
 regardless of how good a band's point estimate looks. Re-run on the same
 calibration data, this correctly rejects the narrow band (LCB 0.794 vs.\
-an 0.85 target) and selects (0.25, 0.75) instead (LCB 0.895).
+a 0.85 target) and selects (0.25, 0.75) instead (LCB 0.895).
 
 \subsection{Validation on a second, independent holdout (\texorpdfstring{$n=300$}{n=300})}\label{sec:holdout2}
 
@@ -712,7 +712,7 @@ when arms escalate at very different rates. \code{direct_control} is
 shown at the default (0.4, 0.6) band; it decided no cases.
 
 \textbf{Table~\ref{tab:bands}: same three arms, matched at four notable bands.}
-Table~\ref{tab:holdout2} compares each arm at its own independently-selected operating
+Table~\ref{tab:holdout2} compares each arm at its own independently selected operating
 point, which is the correct primary comparison but obscures how each arm
 performs off that point. Since disposition is a deterministic function of
 \code{fraud_probability} and the band, every arm's accuracy/coverage at
@@ -900,8 +900,8 @@ low-coverage pattern seen anywhere in this paper---more extreme than
 band whose support was 12 decided cases produced a holdout behavior that
 is, if anything, \textit{more} conservative still. This is not evidence
 the LCB guard is too strict; the fact that a band selected on thin
-support turned out to generalize this narrowly, rather than surprising
-the model with a burst of wrong high-confidence calls, is closer to
+support turned out to generalize this narrowly, rather than springing
+a burst of wrong high-confidence calls, is closer to
 evidence the guard's caution was well-founded. \code{linear_gpt} lands at
 24.3\% coverage and 91.8\% accuracy---close to \code{linear_api}'s own
 24.7\%-coverage cell at the same band in Table~\ref{tab:bands}, but at
@@ -913,7 +913,7 @@ either model across nearly the entire coverage range. AURC for the GPT
 arms is 0.1850 (\code{linear_gpt}) and 0.2046 (\code{agentic_gpt})---both worse (higher) than either Claude arm (0.1080, 0.1117) and far worse
 than \code{classical_ml} (0.0343). At every band swept in Table~\ref{tab:bands}'s
 style, \code{linear_gpt} is consistently \textit{more willing to commit}
-than \code{linear_api} at the same band width (e.g.\ 59.7\% vs.\ 50.7\%
+than \code{linear_api} at the same band width (e.g., 59.7\% vs.\ 50.7\%
 coverage at (0.35, 0.65); 11.0\% vs.\ 6.0\% at (0.10, 0.90)) but
 consistently \textit{less accurate} among the cases it does decide---evidence GPT-5.6 Terra's probability outputs are less sharply polarized
 toward the extremes than Claude's, a genuinely different calibration
@@ -1095,7 +1095,7 @@ cross-record misattribution) rather than fabrication
 (\code{docs/error_taxonomy.md}). The most common source of an outright
 wrong disposition is error-taxonomy category 9---cases where every
 cited fact is correct and the reasoning is coherent, but the case itself
-was genuinely hard (e.g.\ \code{HOLD2_0104}: a well-corroborated
+was genuinely hard (e.g., \code{HOLD2_0104}: a well-corroborated
 multi-signal false positive). That is ordinary task difficulty under
 real uncertainty, not evidence fabrication, and it is worth stating
 plainly: a system can be trustworthy in how it uses evidence while still
@@ -1123,7 +1123,7 @@ full risk-coverage curve against every LLM arm from either model (AURC
 high-precision/low-coverage pattern further still (6.0\% coverage at
 100\% accuracy), not away from it. That the two models' calibration
 procedures failed in genuinely different shapes---one a confidently
-wrong narrow band, the other a correctly-detected thin-support fallback
+wrong narrow band, the other a correctly detected thin-support fallback
 that then held on fresh data---is itself informative: it suggests the
 underlying risk (a modestly sized calibration set meeting a specific
 model's probability-output distribution) is the general hazard, while
@@ -1178,7 +1178,7 @@ This work has the following limitations:
 \item \textbf{Two models, not a broad sweep.} Claude Sonnet 5 (primary)
   and GPT-5.6 Terra (Section~\ref{sec:gpt} cross-model check) only. This is
   evidence the findings are not purely Claude-specific, not a claim they
-  generalize broadly---other frontier providers (e.g.\ Gemini),
+  generalize broadly---other frontier providers (e.g., Gemini),
   open-weight models, and other tiers within either model family remain
   untested.
 \item \textbf{GPT-5.6 Terra was not evaluated as thoroughly as Claude
@@ -1235,7 +1235,7 @@ cross-model check on GPT-5.6 Terra is a first piece of direct evidence
 for that transferability claim, not just an assertion of it: the same
 protocol, applied to a second model, reaches the same practical
 conclusion (classical ML dominates the full risk-coverage curve against
-every LLM arm tested) and surfaces a second, differently-shaped
+every LLM arm tested) and surfaces a second, differently shaped
 calibration difficulty traceable to the same root cause---a modestly
 sized calibration set meeting a specific model's probability-output
 behavior.
@@ -1256,8 +1256,8 @@ finding that larger tool registries can hurt task success) remain open.
 Cross-model replication is no longer fully open---Section~\ref{sec:gpt} reports
 one additional model---but remains partial: GPT-5.6 Terra was not
 carried through the self-consistency ablation or the repeat-run
-stochasticity check (Section~\ref{sec:limits}), and providers beyond Claude and OpenAI
-(e.g.\ Gemini) and open-weight models are untested. We see the
+stochasticity check (Section~\ref{sec:variance}), and providers beyond Claude and OpenAI
+(e.g., Gemini) and open-weight models are untested. We see the
 calibration-failure diagnosis-and-fix methodology, more than any specific
 accuracy number reported here, as the part of this work most worth other
 selective-prediction practitioners carrying forward---reinforced, now,

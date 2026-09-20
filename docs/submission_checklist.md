@@ -31,18 +31,9 @@ Already satisfied by the manuscript (nothing to do):
 
 Requires an author decision or action:
 
-- [ ] **(4) ORCID on the submitting author's Author Portal account.**
-  Ayushi's iD is public; it still has to be *linked to her account on
-  the portal*, which is separate from the iDs now in the manuscript.
 - [ ] **(3) Confirm the author list is final.** Post-submission changes
   need editor approval and are rarely granted.
 - [ ] **(9) Confirm not under consideration elsewhere.**
-- [ ] **(7) Grammar.** Reads clean to me, but this is an
-  immediate-rejection criterion, so it is worth one human pass.
-  Paperpal Preflight is offered in the portal.
-- [ ] **(8) Retraction check on the references.** I verified venues and
-  DOIs but did not check any of the 24 for retraction. Worth a pass,
-  especially over the recent preprints.
 - [ ] **(12) Enter 3-10 keywords in the portal.** The eight in the
   manuscript are a separate field; the portal ones drive Associate
   Editor assignment.
@@ -100,6 +91,47 @@ publication.
   there is no direction in which authoring assistance could have
   flattered the evaluated model. Disclaiming it would have implied a
   concern the results do not support.
+
+### Grammar and retraction passes (2026-09-20)
+
+**Grammar (item 7).** Read the full rendered body end to end. Seven
+real fixes, all now in the PDF:
+
+- "an 0.85 target" -> "a 0.85 target" (Section V-E) -- wrong article
+  before a numeral read aloud as "zero point...".
+- "rather than surprising *the model* with a burst of wrong
+  high-confidence calls" -> "rather than springing a burst of..."
+  (Section V-H). The model was not the party being surprised; the
+  sentence said the opposite of what it meant.
+- Conclusion cited "the repeat-run stochasticity check (Section IX)".
+  Section IX is Limitations; the check is Section V-B. Cross-reference
+  corrected.
+- Section III-A gave the same figure as both "3.50%" and "3.5%" two
+  sentences apart. Now 3.50% in both.
+- Five "e.g." without the comma IEEE's style manual requires -> "e.g.,".
+- Three hyphens after -ly adverbs removed
+  ("independently-selected", "correctly-detected",
+  "differently-shaped"), which IEEE style does not hyphenate.
+
+**Retractions (item 8).** All 24 checked, none retracted or withdrawn.
+
+- The eight arXiv preprints (`fdb2022`, `finfrerag2025`, `faa2025`,
+  `cortex2025`, `siabench2026`, `sopbench2025`, `intellagent2025`,
+  `dai2026`) were queried through the arXiv API in one call: every one
+  returns active, none carries a withdrawal notice, and the returned
+  titles match our bibliography entries.
+- `geifman2017` (NeurIPS proceedings page) and `tian2023` /
+  `campos2024` (ACL Anthology / MIT Press, both fetched while adding
+  DOIs) carry no retraction or erratum notice.
+- `baf2022` and `amlworld2023` searched specifically for retraction
+  notices: none found.
+- Six entries are reports, datasets or software (`acfe2024`,
+  `ukfinance2025`, `ieeecis2019`, `langgraph2024`, `crewai2023`,
+  `claude2026`) and are not retractable article records.
+- `chow1970`, `xiong2024`, `bfcl2025`, `taubench2024`, `autogen2023`
+  turned up no retraction notice in searching, though for these the
+  evidence is absence-of-notice rather than a positive check against a
+  retraction database.
 
 ### References checked against published venues (2026-09-20)
 
