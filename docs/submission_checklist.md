@@ -11,9 +11,25 @@ anything I can finish unilaterally.
 Nothing blocking in the manuscript itself. Two account/process steps
 remain, neither of them a document change:
 
-- [ ] **Submit both files.** IEEE Access requires the LaTeX source
-  *and* the PDF, content matching exactly, under 40MB. Current PDF is
-  1.2MB.
+- [ ] **Upload three files.** Built and verified 2026-09-20.
+  - `paper/latex/fraudops_bench.pdf` (1.2 MB) -- the manuscript.
+  - `paper/fraudops_bench_latex_source.zip` (1.1 MB) -- the LaTeX
+    source: `fraudops_bench.tex`, `ieeeaccess.cls`, and six images.
+    Three of those (`Logo.png`, `notaglineLogo.png`, `bullet.png`) are
+    loaded by the class and named nowhere in the `.tex`; the build
+    fails without them, which is the easy mistake here.
+  - `paper/supplementary_holdout_v2.zip` (5.3 MB) -- per-arm run
+    outputs.
+
+  7.3 MB total, well under the 40 MB cap.
+
+  **Regenerate with `paper/build_submission.sh` after any edit to the
+  `.tex` or its images.** The zip is a snapshot; edit the source
+  without rerunning it and you will upload a source archive that does
+  not match your PDF, which IEEE requires to match exactly. The script
+  rebuilds the archive and then proves it by extracting to an empty
+  directory and compiling there -- it exits non-zero if a file is
+  missing.
 - [ ] **Pick the manuscript type at submission.** That dropdown is what
   produces the "RESEARCH ARTICLE" banner on the published first page;
   it is not something the template can set.
