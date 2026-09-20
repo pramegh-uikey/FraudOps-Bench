@@ -8,15 +8,6 @@ anything I can finish unilaterally.
 
 ## Open items
 
-- [ ] **Page count: 13 pages, up from 12.** IEEE Access's APC covers 10
-  pages; overlength charges apply per page beyond that. The review-fix
-  round on branch `paper-review-fixes` added roughly a page (the
-  metrics formalization in Section III-D, the new Section III-C
-  implementation details, the case-sampling paragraph in Section III-A,
-  and two Limitations bullets). Your call whether to pay for the extra
-  page or trim; if trimming, Section III-C's `classical_ml` feature
-  enumeration and Section V-H's per-band narration are the most
-  compressible without losing a reviewer-relevant claim.
 - [ ] **References are preprint-heavy.** 9 of 24 entries are arXiv-only
   and only `chow1970` carries a DOI. Where a peer-reviewed version now
   exists (τ-bench, AutoGen, SOP-Bench are the likely candidates),
@@ -123,6 +114,35 @@ different framing.
 
 This takes the PDF from 172 KB to 1.2 MB, which is immaterial for the
 portal's limits.
+
+### Checked against IEEE Access's current guidelines (2026-09-20)
+
+- **Page count is a non-issue; an earlier note in this file was wrong.**
+  It claimed the APC covers 10 pages with per-page overlength charges.
+  It does not. IEEE Access charges a flat $2,160 per article and states
+  plainly: "There is no page limit for articles and therefore no
+  over-length article charge." They only recommend staying under 20
+  pages for readability. At 13 pages there is nothing to pay and no
+  reason to trim. The 10-page/overlength rule belongs to other IEEE
+  Transactions, not Access. Source:
+  https://ieeeaccess.ieee.org/about-ieee-access/article-processing-charges/
+- **Line numbers: not required, and not available anyway.** Nothing in
+  the Submission Guidelines or Preparing Your Article pages mentions
+  line numbers. More to the point, the `lineno` option is dead code in
+  our `ieeeaccess.cls`: `\iflineno` is declared (line 12), set by
+  `\DeclareOption` (lines 30/32) and switched on by
+  `\ExecuteOptions{...,lineno,...}` (line 44), but the flag is never
+  tested anywhere in the class and the `lineno` package is never
+  loaded. Test-compiled with `\documentclass[lineno]{ieeeaccess}`: the
+  extracted text is byte-identical to the current build. Do not bother.
+- **The first-page furniture is correct as-is.** The "RESEARCH ARTICLE"
+  banner, the real received/accepted/published dates, the assigned DOI,
+  the journal page number and the associate-editor line in a published
+  IEEE Access PDF are all added by IEEE production after acceptance.
+  `ieeeaccess.cls` has no command for the banner at all. The
+  `\history{... xxxx 00, 0000 ...}` and `\doi{10.1109/ACCESS.2017.DOI}`
+  placeholders are exactly what the official template ships with and
+  are the correct state to submit in.
 
 ### Supplementary material rebuilt
 
