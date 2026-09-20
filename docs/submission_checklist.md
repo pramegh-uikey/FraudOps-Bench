@@ -8,9 +8,47 @@ anything I can finish unilaterally.
 
 ## Open items
 
-Nothing blocking in the manuscript itself. Two account/process steps
-remain, neither of them a document change:
+Checked against IEEE Access's official 18-item submission checklist
+(https://ieeeaccess.ieee.org/guide-for-authors/submission-guidelines/,
+retrieved 2026-09-20). Portal is the **IEEE Author Portal**,
+https://ieee.atyponrex.com/journal/ieee-access -- not ScholarOne, which
+an earlier note in this file wrongly assumed.
 
+Already satisfied by the manuscript (nothing to do):
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Template, source + PDF matching, <40MB | 7.3 MB total, archive verified by clean-room compile |
+| 2 | AI-generated text disclosed in Acknowledgments, citing the system | Itemized by section and level of use, cites [24] |
+| 5 | All authors in both source and PDF | Both, with ORCIDs |
+| 6 | Biographies for all authors below references | Both, with photos |
+| 10 | Supplementary material ready | `supplementary_holdout_v2.zip` |
+| 11 | Abbreviations defined at first body use | Swept 2026-09-20; AURC was the one miss, fixed |
+| 15 | Video | N/A |
+| 16 | Resubmission response document | N/A, first submission |
+| 17 | Under 20 pages, else EiC pre-approval | 13 pages |
+| 18 | No "Lena image" | N/A |
+
+Requires an author decision or action:
+
+- [ ] **(4) ORCID on the submitting author's Author Portal account.**
+  Ayushi's iD is public; it still has to be *linked to her account on
+  the portal*, which is separate from the iDs now in the manuscript.
+- [ ] **(3) Confirm the author list is final.** Post-submission changes
+  need editor approval and are rarely granted.
+- [ ] **(9) Confirm not under consideration elsewhere.**
+- [ ] **(7) Grammar.** Reads clean to me, but this is an
+  immediate-rejection criterion, so it is worth one human pass.
+  Paperpal Preflight is offered in the portal.
+- [ ] **(8) Retraction check on the references.** I verified venues and
+  DOIs but did not check any of the 24 for retraction. Worth a pass,
+  especially over the recent preprints.
+- [ ] **(12) Enter 3-10 keywords in the portal.** The eight in the
+  manuscript are a separate field; the portal ones drive Associate
+  Editor assignment.
+- [ ] **(13) Manuscript type: "Research Article".** This is what
+  produces the banner on the published first page.
+- [ ] **(14) Opposed reviewers list**, if you want one.
 - [ ] **Upload three files.** Built and verified 2026-09-20.
   - `paper/latex/fraudops_bench.pdf` (1.2 MB) -- the manuscript.
   - `paper/fraudops_bench_latex_source.zip` (1.1 MB) -- the LaTeX
@@ -21,8 +59,6 @@ remain, neither of them a document change:
   - `paper/supplementary_holdout_v2.zip` (5.3 MB) -- per-arm run
     outputs.
 
-  7.3 MB total, well under the 40 MB cap.
-
   **Regenerate with `paper/build_submission.sh` after any edit to the
   `.tex` or its images.** The zip is a snapshot; edit the source
   without rerunning it and you will upload a source archive that does
@@ -30,9 +66,12 @@ remain, neither of them a document change:
   rebuilds the archive and then proves it by extracting to an empty
   directory and compiling there -- it exits non-zero if a file is
   missing.
-- [ ] **Pick the manuscript type at submission.** That dropdown is what
-  produces the "RESEARCH ARTICLE" banner on the published first page;
-  it is not something the template can set.
+- [ ] **Verify the portal extracted both authors** during upload
+  (item 5's second half) before you finish the submission.
+
+Note: the APC ($2,160) is charged **after acceptance**, not at
+submission. IEEE Access advertises 4-6 weeks from submission to online
+publication.
 
 ## Already resolved (for reference, not action items)
 
