@@ -15,6 +15,7 @@ anything I can finish unilaterally.
   changed in the fix round: verifying current publication venues needs
   a literature check I can't do offline, and guessing a venue is worse
   than citing the preprint honestly.
+
 ## Already resolved (for reference, not action items)
 
 ### ORCID iDs and Acknowledgments (2026-09-20)
