@@ -27,9 +27,8 @@ anything I can finish unilaterally.
   portal** -- that record is what IEEE production uses for the
   published PDF.
 - Ayushi's inferred Accertify end year (2026) confirmed correct by the
-  authors. Her Accenture job title is still absent; supply it if you
-  want that sentence to match the "currently a <Title> with <Org>"
-  pattern.
+  authors, who also supplied her Accenture title (AI Decision Science
+  Consultant). Both biographies are now complete.
 - Acknowledgments rewritten for IEEE AI-disclosure compliance. The old
   text predated most of the AI-assisted writing in the manuscript and
   named only four sections. IEEE requires that "specific sections of
@@ -44,6 +43,19 @@ anything I can finish unilaterally.
   there is no direction in which authoring assistance could have
   flattered the evaluated model. Disclaiming it would have implied a
   concern the results do not support.
+
+### Abbreviation check (2026-09-20)
+
+IEEE Access requires abbreviations to be defined at first use in the
+body "even if defined in the abstract." Swept every all-caps token in
+the rendered text against its first body occurrence. One real miss:
+AURC was used from Section III-D onward but only spelled out in
+Section V-H, long after. The expansion now sits at the first body use
+and the late redundant one is gone. Everything else checked out --
+LLM, ML, API, SOP, SOC, RLHF, CI, LCB, PII, RAG, AURC, IIT all defined
+on first body use; the remaining flags were section headings, roman
+numerals, cited-work names (FAA, FDB, BAF, CORTEX), and reference-list
+place abbreviations.
 
 ### Pre-submission review round (branch `paper-review-fixes`, 2026-09-19)
 

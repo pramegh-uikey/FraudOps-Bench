@@ -531,7 +531,8 @@ report the coverage-weighted score
 \end{equation}
 the fraction of the whole queue an arm resolves correctly. Sweeping
 $\tau$ over a grid traces the arm's full risk-coverage curve
-(Fig.~\ref{fig:rc}), summarized by its area,
+(Fig.~\ref{fig:rc}), summarized by the area under the risk-coverage
+curve (AURC),
 \begin{equation}\label{eq:aurc}
 \mathrm{AURC} = \int R\,dc,
 \end{equation}
@@ -908,7 +909,7 @@ meaningfully lower accuracy (0.918 vs.\ 0.959).
 
 Read against the full risk-coverage curve (Fig.~\ref{fig:rc}, now showing all five
 arms): \code{classical_ml} continues to dominate every LLM arm from
-either model across nearly the entire coverage range. Area under the risk-coverage curve (AURC) for the GPT
+either model across nearly the entire coverage range. AURC for the GPT
 arms is 0.1850 (\code{linear_gpt}) and 0.2046 (\code{agentic_gpt})---both worse (higher) than either Claude arm (0.1080, 0.1117) and far worse
 than \code{classical_ml} (0.0343). At every band swept in Table~\ref{tab:bands}'s
 style, \code{linear_gpt} is consistently \textit{more willing to commit}
@@ -1463,10 +1464,7 @@ Anthropic, 2026. [Online]. Available: https://claude.ai (accessed Sep.
 %% Interests).
 %% Ayushi's Accertify end year (2026) was inferred rather than taken from
 %% her resume, which still read "Present"; confirmed correct by the
-%% authors 2026-09-20. Her Accenture title is still omitted, so that
-%% sentence reads "She is currently with Accenture" rather than the
-%% "currently a <Title> with <Org>" pattern used elsewhere -- supply a
-%% title if you want it to match.
+%% authors 2026-09-20, who also supplied her Accenture title.
 %% Photographs supplied by the authors, cropped to
 %% IEEE's 1in x 1.25in (4:5) biography box. AUTHORS: please review and correct before
 %% submission---this is the one part of the manuscript not drawn from
@@ -1482,7 +1480,8 @@ Data Scientist with Accertify (formerly an American Express subsidiary),
 Gurgaon, India, where she developed gradient-boosted fraud-detection
 models for e-commerce, travel, and gaming clients, engineered large-scale
 real-time risk features in PySpark for velocity, device, and account-takeover
-signals. She is currently with Accenture, India, working on a seven-agent workflow for
+signals. She is currently an AI Decision Science Consultant with
+Accenture, India, where she works on a seven-agent workflow for
 software-development-lifecycle acceleration. Her research interests
 include applying large language model agents to fraud investigation
 workflows and selective-prediction evaluation methodology.
