@@ -25,6 +25,11 @@
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
 \let\year\IEEEaccessYearCmd
 \usepackage[unicode=true,hidelinks]{hyperref}
+%% ieeeaccess.cls has no ORCID support of its own (the iD icons in a
+%% published Access PDF are added by IEEE production). orcidlink draws
+%% the icon and hyperlinks it; it needs hyperref and tikz, so it loads
+%% after both.
+\usepackage{orcidlink}
 \usepackage{url}
 \renewcommand{\arraystretch}{1.25}
 \newcolumntype{R}{>{\raggedleft\arraybackslash}X}
@@ -66,8 +71,8 @@ Agents for Card-Not-Present Fraud Investigation, and a Calibration
 Pitfall in Selective Prediction with LLM Confidence Scores}
 
 \author{
-\uppercase{Ayushi Ambilkar}\authorrefmark{1}
-\uppercase{and Pramegh Uikey}\authorrefmark{2}
+\uppercase{Ayushi Ambilkar}\,\orcidlink{0009-0000-5624-7588}\authorrefmark{1}
+\uppercase{and Pramegh Uikey}\,\orcidlink{0009-0004-1052-8703}\authorrefmark{2}
 }
 
 \address[1]{Independent Researcher, India (e-mail: ambilkarayushi@gmail.com)}
@@ -75,12 +80,10 @@ Pitfall in Selective Prediction with LLM Confidence Scores}
 
 \renewcommand\correspondingauthor{Corresponding author: Ayushi Ambilkar (e-mail: ambilkarayushi@gmail.com).}
 
-%% TODO before submission: the corresponding author (Ayushi Ambilkar)
-%% must register a public, populated ORCID iD at orcid.org and enter it
-%% in the IEEE submission portal per Submission Checklist item 4 (this is
-%% an account-level action, not a field in this document). Both authors
-%% have also asked to register an ORCID iD, beyond that strict
-%% requirement -- see docs/submission_checklist.md.
+%% Both authors' ORCID iDs are set in \author above. Still enter them in
+%% the IEEE submission portal too (Submission Checklist item 4) -- the
+%% portal record is what IEEE production uses to render the iD icons in
+%% the published PDF; the ones here are for the submitted manuscript.
 
 \markboth
 {Ambilkar and Uikey: FraudOps-Bench}
@@ -1296,17 +1299,36 @@ only.
 
 \section*{Acknowledgments}
 
-The authors used Claude (Anthropic) \cite{claude2026} to draft portions of the
-Introduction, Related Work, Discussion, and Conclusion and Future Work
-sections, to identify and verify the prior-work citations in the
-References section, and to integrate existing experimental data (the
-Section~\ref{sec:variance} repeat-run variance table and the error-taxonomy findings
-referenced in Section~\ref{sec:discussion}) into the manuscript text. All experimental
-design, code, data collection, and statistical analysis were performed
-by the authors; all AI-assisted text and citations were reviewed and
-verified by the authors against the underlying source data
+The authors used Claude (Anthropic) \cite{claude2026} as a writing and
+manuscript-review assistant. Per IEEE policy, the sections involved and
+the level of use are itemized here. AI-drafted from author-supplied
+findings and then revised by the authors: portions of the Introduction,
+Related Work, Discussion, and Conclusion and Future Work.
+AI-drafted from the project's own source data, code, and
+author-supplied facts: Section~\ref{sec:task}'s case-sampling
+paragraphs, Section~\ref{sec:impl} (implementation details),
+Section~\ref{sec:sop}'s metric definitions~\eqref{eq:select}--\eqref{eq:aurc},
+the prevalence and case-eligibility entries in Section~\ref{sec:limits},
+the Declaration of Competing Interests, and the author biographies.
+Integrated into the manuscript text from existing experimental logs:
+Section~\ref{sec:variance}'s repeat-run variance table and the
+error-taxonomy findings discussed in Section~\ref{sec:discussion}. The
+assistant also identified and verified the prior-work citations in the
+References, and recomputed every number reported in this paper against
+the run outputs in the supplementary material, which is how the cost
+figures in Section~\ref{sec:cost} were corrected.
+
+No AI system contributed to experimental design, code, data collection,
+or statistical analysis, all of which were performed by the authors.
+All AI-assisted text and citations were reviewed and verified by the
+authors against the underlying source data
 (\code{docs/methodology_log.md}, \code{docs/error_taxonomy.md}, and the
-per-arm run outputs provided as supplementary material) before inclusion.
+per-arm run outputs provided as supplementary material) before
+inclusion. The models evaluated as subjects of this benchmark are
+distinct from this authoring assistance: no evaluated arm's output,
+score, or ranking was produced, adjusted, or interpreted by the writing
+assistant, and every figure reported for those arms is reproducible
+from the released code and run outputs independently of it.
 
 \begin{thebibliography}{24}
 
@@ -1443,13 +1465,12 @@ Anthropic, 2026. [Online]. Available: https://claude.ai (accessed Sep.
 %% Employment history appears as background only -- the work itself is
 %% independent of every employer named (Declaration of Competing
 %% Interests).
-%% TWO DATES NEED CONFIRMING, both inferred rather than stated on a
-%% resume: (a) Ayushi's Accertify end year, given as 2026 -- her resume
-%% still reads "Present" but she has since moved to Accenture, and the
-%% Accertify work references a late-2025 model, so 2026 is the only
-%% consistent reading; (b) her Accenture title, deliberately omitted
-%% rather than guessed -- add it if you want the sentence to match the
-%% "she is currently a <Title> with <Org>" pattern used elsewhere.
+%% Ayushi's Accertify end year (2026) was inferred rather than taken from
+%% her resume, which still read "Present"; confirmed correct by the
+%% authors 2026-09-20. Her Accenture title is still omitted, so that
+%% sentence reads "She is currently with Accenture" rather than the
+%% "currently a <Title> with <Org>" pattern used elsewhere -- supply a
+%% title if you want it to match.
 %% Photographs supplied by the authors, cropped to
 %% IEEE's 1in x 1.25in (4:5) biography box. AUTHORS: please review and correct before
 %% submission---this is the one part of the manuscript not drawn from

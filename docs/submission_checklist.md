@@ -15,28 +15,28 @@ anything I can finish unilaterally.
   changed in the fix round: verifying current publication venues needs
   a literature check I can't do offline, and guessing a venue is worse
   than citing the preprint honestly.
-- [ ] **ORCID iDs, both authors.** IEEE's own Submission Checklist item 4
-  only strictly requires the *corresponding* author's (Ayushi's) ORCID
-  in the submission portal -- the TODO comment in the `.tex`
-  (~line 67) currently only mentions her. You've now said you want both
-  authors registered, which is good practice beyond the strict
-  requirement. Each author registers separately at orcid.org (an
-  account-level action, not a document field); Ayushi's goes in the
-  portal per the checklist, and if you want Pramegh's iD reflected in
-  the manuscript too, IEEE Access's `\author`/`\address` commands support
-  an optional ORCID field -- flag it here once both iDs exist and I'll
-  wire it in.
-- [ ] **Acknowledgments revisions -- specifics TBD.** You mentioned
-  "some minor revisions" without saying what yet. Current text
-  (`fraudops_bench.tex`, `\section*{Acknowledgments}`, ~line 1189)
-  discloses AI-assisted drafting of Introduction/Related
-  Work/Discussion/Conclusion, citation verification, and integrating
-  already-existing experimental data into text -- with all experimental
-  design, code, data collection, and statistical analysis credited to
-  the authors. Come back to this with what you want changed and I'll
-  make the edit.
-
 ## Already resolved (for reference, not action items)
+
+### ORCID iDs and Acknowledgments (2026-09-20)
+
+- Both ORCID iDs are now in `\author`, rendered as linked iD icons via
+  the `orcidlink` package (`ieeeaccess.cls` has none of its own):
+  Ayushi 0009-0000-5624-7588, Pramegh 0009-0004-1052-8703. Link targets
+  verified in the built PDF. **Still enter both in the submission
+  portal** -- that record is what IEEE production uses for the
+  published PDF.
+- Ayushi's inferred Accertify end year (2026) confirmed correct by the
+  authors. Her Accenture job title is still absent; supply it if you
+  want that sentence to match the "currently a <Title> with <Org>"
+  pattern.
+- Acknowledgments rewritten for IEEE AI-disclosure compliance. The old
+  text predated most of the AI-assisted writing in the manuscript and
+  named only four sections. IEEE requires that "specific sections of
+  the article that use AI-generated content shall be identified and
+  accompanied by a brief explanation regarding the level at which the
+  AI system was used." The new text itemizes three distinct levels of
+  use and adds a statement separating the writing assistant from the
+  models evaluated as benchmark subjects.
 
 ### Pre-submission review round (branch `paper-review-fixes`, 2026-09-19)
 
