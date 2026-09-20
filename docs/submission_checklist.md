@@ -36,8 +36,14 @@ anything I can finish unilaterally.
   the article that use AI-generated content shall be identified and
   accompanied by a brief explanation regarding the level at which the
   AI system was used." The new text itemizes three distinct levels of
-  use and adds a statement separating the writing assistant from the
-  models evaluated as benchmark subjects.
+  use. A sentence separating the writing assistant from the evaluated
+  models was drafted and then removed at the authors' direction: the
+  two uses are causally unrelated (the runs predate the drafting and
+  are reproducible from the released outputs), and the paper's headline
+  finding is that classical ML beats every LLM arm including Claude, so
+  there is no direction in which authoring assistance could have
+  flattered the evaluated model. Disclaiming it would have implied a
+  concern the results do not support.
 
 ### Pre-submission review round (branch `paper-review-fixes`, 2026-09-19)
 
