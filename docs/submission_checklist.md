@@ -8,13 +8,15 @@ anything I can finish unilaterally.
 
 ## Open items
 
-- [ ] **References are preprint-heavy.** 9 of 24 entries are arXiv-only
-  and only `chow1970` carries a DOI. Where a peer-reviewed version now
-  exists (τ-bench, AutoGen, SOP-Bench are the likely candidates),
-  IEEE prefers it, and IEEE Access asks for DOIs where available. Not
-  changed in the fix round: verifying current publication venues needs
-  a literature check I can't do offline, and guessing a venue is worse
-  than citing the preprint honestly.
+Nothing blocking in the manuscript itself. Two account/process steps
+remain, neither of them a document change:
+
+- [ ] **Submit both files.** IEEE Access requires the LaTeX source
+  *and* the PDF, content matching exactly, under 40MB. Current PDF is
+  1.2MB.
+- [ ] **Pick the manuscript type at submission.** That dropdown is what
+  produces the "RESEARCH ARTICLE" banner on the published first page;
+  it is not something the template can set.
 
 ## Already resolved (for reference, not action items)
 
@@ -43,6 +45,30 @@ anything I can finish unilaterally.
   there is no direction in which authoring assistance could have
   flattered the evaluated model. Disclaiming it would have implied a
   concern the results do not support.
+
+### References checked against published venues (2026-09-20)
+
+Four entries had peer-reviewed versions and were updated:
+
+- `taubench2024` -> Proc. ICLR 2025 (was arXiv:2406.12045)
+- `autogen2023` -> Proc. 1st Conf. Language Modeling (COLM) 2024
+  (was arXiv:2308.08155); title also corrected to the published form,
+  which drops "framework"
+- `campos2024` -> Trans. Assoc. Comput. Linguistics, vol. 12, pp.
+  1497-1516, 2024, doi: 10.1162/tacl_a_00715 (was arXiv:2405.01976);
+  first author's initials corrected from "M. M. Campos" to "M. Campos"
+- `tian2023` -> EMNLP venue was already correct; added
+  doi: 10.18653/v1/2023.emnlp-main.330
+
+Checked and left as preprints because no published version was found:
+`sopbench2025` (revised Feb 2026, still arXiv), `intellagent2025`,
+`fdb2022`, plus the recent ones (`finfrerag2025`, `faa2025`,
+`cortex2025`, `siabench2026`, `dai2026`). Eight arXiv citations remain,
+which is defensible for work this recent.
+
+DOIs: `chow1970`, `campos2024` and `tian2023` now carry them. The
+remaining venues -- NeurIPS, ICLR, ICML/PMLR -- do not mint DOIs for
+proceedings papers, so there are none to add.
 
 ### Abbreviation check (2026-09-20)
 
